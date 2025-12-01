@@ -1,0 +1,5 @@
+orbits_path = '../dist/orbits.h5'
+simulation_path = '../dist/default_simulation_output.h5'
+gw_path = '../dist/default_gw_output.h5'
+glitch_path = '../dist/default_glitch_output.h5'
+gw_dataset_path = '../dist/gw_dataset.h5'

@@ -1,13 +1,9 @@
 import numpy as np
-import h5py
+import os
 from simulation import run_simulation, run_tdi
 from qtransform import generate_qscan
-
-orbits_path = '../dist/orbits.h5'
-simulation_path = '../dist/default_simulation_output.h5'
-tdi_path = '../dist/default_tdi_output.h5'
-gw_path = '../dist/default_gw_output.h5'
-glitch_path = '../dist/default_glitch_output.h5'
+from config import *
+from h5file_helpers import create_dataset, append_gw_sample
 
 pipe = {'t0':10368000, 'dt':0.25, 'size':72000, 'gw_beta':0, 'gw_lambda':np.pi/7}
 
@@ -16,6 +12,14 @@ glitches = [{'type':'OneSidedDoubleExpGlitch', 't_inj': 0,
 
 mass_arr = [1e5]
 q_arr = [1, 10]
+
+res = 512
+H, W = res, res
+
+if os.path.exists(gw_dataset_path):
+    os.remove(gw_dataset_path)
+    
+h5file = create_dataset(gw_dataset_path, resolution=(H, W))
 
 for m in mass_arr:
     for q in q_arr:
@@ -28,5 +32,6 @@ for m in mass_arr:
         tdi_dict = run_tdi(simulation_path, pipe)
 
         event = gws[0]
-        t_arr, f_arr, QT = generate_qscan(tdi_dict, Q=15, channel='X', pipe=pipe, event=event, resolution=512, 
+        t_arr, f_arr, QT = generate_qscan(tdi_dict, Q=15, channel='X', pipe=pipe, event=event, resolution=res, 
                         frange=(1e-3, 1e-1), trange=(-1, 1))
+        append_gw_sample(h5file, QT, event['m1'], event['m2'], event['d'])
