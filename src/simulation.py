@@ -1,4 +1,5 @@
 import os
+import numpy as np
 from gw_shapes import ReducedOneSidedDoubleExpGW, BinaryInspiralGW
 
 from scipy.signal.windows import tukey
@@ -9,12 +10,16 @@ from pytdi import Data
 
 from lisaglitch import RectangleGlitch, ShapeletGlitch, OneSidedDoubleExpGlitch, TwoSidedDoubleExpGlitch
 
+import warnings
+warnings.filterwarnings("ignore")
+
 def create_gws(gws, pipe, gw_path, orbits_path):
     if os.path.exists(gw_path):
         os.remove(gw_path)
     for gw in gws:
         if gw['type'] == 'BinaryInspiralGW':
-            gw = BinaryInspiralGW(m1=gw['m1'], m2=gw['m2'], d=gw['d'], e=gw['e'], t_inj=gw['t_inj'] + pipe['t0'],
+            gw = BinaryInspiralGW(m1=gw['m1'], m2=gw['m2'], d=gw['d'], t_inj=gw['t_inj'] + pipe['t0'],
+                                  spin1 = gw['spin1'], spin2 = gw['spin2'],
                         gw_beta=pipe['gw_beta'], gw_lambda=pipe['gw_lambda'], orbits=orbits_path,
                         dt=pipe['dt'], size=pipe['size'], t0=pipe['t0'], domain=gw['domain'])
 
@@ -78,7 +83,7 @@ def run_simulation(gws, glitches, pipe,
     
     lisa_instrument.write(simulation_path)
 
-def run_tdi(simulation_path, pipe):
+def run_tdi(simulation_path, pipe, f_psd, psd):
     channels = [X2, Y2, Z2]
     tdi_names = ["X", "Y", "Z"]
     tdi_dict = TimeSeriesDict()
@@ -93,7 +98,31 @@ def run_tdi(simulation_path, pipe):
         tdi_data = channel.build(**data.args)(data.measurements)
     
         # WINDOW TDI CHANNEL DATA
-        window = tukey(tdi_data.size, alpha=0.001)
-        tdi_dict[tdi_names[i]] = TimeSeries(tdi_data * window, t0=pipe['t0'], dt=pipe['dt'])
+        window = tukey(tdi_data.size, alpha=0.05)
+        signal = tdi_data * window
+        tdi_dict[tdi_names[i]] = TimeSeries(whiten_with_psd(np.array(signal), pipe['dt'], f_psd, psd), t0=pipe['t0'], dt=pipe['dt'])
     
     return tdi_dict
+
+def whiten_with_psd(timeseries, dt, f_psd, psd):
+    N = len(timeseries)
+
+    # FFT frequencies
+    freqs = np.fft.rfftfreq(N, dt)
+
+    # FFT of data
+    data_fft = np.fft.rfft(timeseries)
+
+    # Interpolate PSD onto FFT grid
+    psd_interp = np.interp(freqs, f_psd, psd)
+
+    # Protect against zeros / crazy low values
+    psd_interp = np.maximum(psd_interp, 1e-40)
+
+    # Whitening
+    white_fft = data_fft / np.sqrt(psd_interp)
+
+    # Back to time domain
+    white = np.fft.irfft(white_fft, n=N)
+
+    return white

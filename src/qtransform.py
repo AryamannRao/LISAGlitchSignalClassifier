@@ -79,3 +79,14 @@ def generate_qscan(tdi_dict, channel, pipe, event,
                         frange=frange, trange=(np.min(timeslice),np.max(timeslice)))
 
     return t_arr, f_arr, QT
+
+def varq_transform(tdi_dict, channel, pipe, event, resolution, frange, trange, Qvals):
+    QT = np.zeros((len(Qvals), resolution, resolution), dtype=np.float32)
+
+    for i, Q in enumerate(Qvals):
+        t_arr, f_arr, arr = generate_qscan(tdi_dict=tdi_dict, channel=channel, pipe=pipe, event=event, 
+                                           resolution=resolution, frange=frange, trange=trange, Q=Q)
+        QT[i] = arr
+
+    varQT = np.max(QT, axis=0)
+    return t_arr, f_arr, varQT

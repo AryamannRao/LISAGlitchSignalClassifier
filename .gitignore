@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.pyc
+
+# Virtual environments
+venv/
+.env/
+
+# Data files (CRITICAL FOR YOU)
+data/
+datasets/
+*.h5
+
+# Plots / outputs
+*.png
+*.jpg
+*.pdf
+
+# Logs
+*.log
+
+# OS junk
+.DS_Store
