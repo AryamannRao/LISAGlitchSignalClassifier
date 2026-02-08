@@ -3,46 +3,43 @@ os.environ["OMP_NUM_THREADS"] = "1"
 os.environ["MKL_NUM_THREADS"] = "1"
 os.environ["OPENBLAS_NUM_THREADS"] = "1"
 
+import sys
+import contextlib
 import numpy as np
 import time
-import shutil
 
 from simulation import run_simulation, run_tdi
-from qtransform import varq_transform
 from h5file_helpers import create_dataset, append_gw_sample
 from config import *
 
 from concurrent.futures import ProcessPoolExecutor, as_completed
+from tqdm import tqdm
 
-import warnings
-warnings.filterwarnings("ignore")
-
-psd_data = np.load(psd_path)
-F_PSD = psd_data["f"]
-PSD = psd_data["psd"]
-
-def get_mass_specific_params(m1, m2, specs):
-    if m1 < 1e5 or m2 < 1e5:
-        spec = specs['low_mass']
-    elif m1 > 1e6 or m2 > 1e6:
-        spec = specs['high_mass']
-    else:
-        spec = specs['mid_mass']
-    return spec
+@contextlib.contextmanager
+def suppress_output():
+    with open(os.devnull, "w") as devnull:
+        old_stdout = sys.stdout
+        old_stderr = sys.stderr
+        sys.stdout = devnull
+        sys.stderr = devnull
+        try:
+            yield
+        finally:
+            sys.stdout = old_stdout
+            sys.stderr = old_stderr
 
 def run_one_sample(args):
-    m1, m2, d, spin, spec, pipe = args
+    m1, m2, d, spin1, spin2, pipe = args
 
     gws = [{
         'type': 'BinaryInspiralGW',
         'm1': m1,
         'm2': m2,
         'd': d,
-        'spin1': spin,
-        'spin2': spin,
-        't_inj': spec['t_inj'] * 3600,
-        'domain': 'freq'
-    }]
+        'spin1': spin1,
+        'spin2': spin2,
+        't_inj': pipe['t_inj'],
+        'domain': 'freq'}]
 
     glitches = [{'type':'OneSidedDoubleExpGlitch', 't_inj': 0,
              'level':0, 't_rise':1, 't_fall':1, 
@@ -54,83 +51,117 @@ def run_one_sample(args):
     local_gw_path     = f"{gw_path}_{pid}.h5"
     local_glitch_path = f"{glitch_path}_{pid}.h5"
 
-    run_simulation(
-        gws, glitches, pipe,
-        local_gw_path, local_glitch_path, orbits_path,
-        local_sim_path,
-        disable_noise=False
-    )
+    with suppress_output():
+        run_simulation(
+            gws, glitches, pipe,
+            local_gw_path, local_glitch_path, orbits_path,
+            local_sim_path,
+            disable_noise=False
+        )
 
-    tdi_dict = run_tdi(local_sim_path, pipe, F_PSD, PSD)
+    tdi_dict = run_tdi(local_sim_path, pipe)
 
-    event = gws[0]
+    """event = gws[0]
     _, _, varQT = varq_transform(
         tdi_dict, 'X', pipe, event,
         resolution=512,
         frange=spec['frange'],
         trange=spec['trange'],
         Qvals=spec['Qvals']
-    )
+    )"""
 
     os.remove(local_sim_path)
     os.remove(local_gw_path)
     os.remove(local_glitch_path)
 
-    return varQT, m1, m2, d, spin
+    return tdi_dict, m1, m2, d, spin1, spin2, pipe['gw_beta'], pipe['gw_lambda']
+
+def run_chunk(job_chunk):
+    results = []
+    for job in job_chunk:
+        try:
+            results.append(run_one_sample(job))
+        except Exception as e:
+            # optional: log and skip
+            continue
+    return results
+
+def chunkify(lst, chunksize):
+    for i in range(0, len(lst), chunksize):
+        yield lst[i:i + chunksize]
+
+def chirp_mass(m1, m2):
+    return (m1 * m2)**(3/5) / (m1 + m2)**(1/5)
+
+def get_param_values(nsamples):
+    m1_array = 10**np.random.uniform(4, 7, size=nsamples)
+    m2_array = m1_array * np.random.uniform(1, 5, size=nsamples)
+    chirp_array = chirp_mass(m1_array, m2_array)
+
+    spin1_array = np.random.uniform(0, 0.9, size=nsamples)
+    spin2_array = spin1_array * np.random.choice([-1, 1], size=nsamples)
+
+    low = chirp_array < 1e5
+    med = (chirp_array >= 1e5) & (chirp_array <= 1e6)
+    high = chirp_array > 1e6
+
+    d_array = np.empty_like(m1_array, dtype=float)
+    d_array[low] = 10**np.random.uniform(3, 4, size=np.sum(low))
+    d_array[med] = 10**np.random.uniform(3, 5, size=np.sum(med))
+    d_array[high] = 10**np.random.uniform(4, 5, size=np.sum(high))
+
+    gw_beta_array = np.random.uniform(-np.pi/2, np.pi/2, size=nsamples)
+    gw_lambda_array = np.random.uniform(0, 2*np.pi, size=nsamples)
+
+    return m1_array, m2_array, d_array, spin1_array, spin2_array, gw_beta_array, gw_lambda_array
 
 def main():
-
     start = time.time()
 
-    mass_arr = [1e6, 1e7]
-    q_arr = [1]
-    spin_arr = [0.0]
+    nsamples = 400
 
-    specs = {'low_mass': {'trange':(-5, 1), 'frange':(1e-3, 1e-1), 
-                      'Qvals':np.linspace(29, 31, 5), 
-                      'drange':np.logspace(3, 4, 5), 'size':10, 't_inj':7},
-         'mid_mass': {'trange':(-5, 1), 'frange':(1e-3, 1e-1), 
-                      'Qvals':np.linspace(15, 17, 5), 
-                      'drange':np.logspace(3, 5, 5), 'size':10, 't_inj':7},
-         'high_mass': {'trange':(-5, 2), 'frange':(1e-4, 1e-2), 
-                       'Qvals':np.linspace(5, 7, 5), 
-                       'drange':np.logspace(4, 5, 5), 'size':10, 't_inj':7}}
+    m1_array, m2_array, d_array, spin1_array, spin2_array, gw_beta_array, gw_lambda_array = get_param_values(nsamples)
 
     # Prepare job list
     jobs = []
 
-    for m in mass_arr:
-        for q in q_arr:
-            m1, m2 = m, m * q
-            spec = get_mass_specific_params(m1, m2, specs)
+    for i, m1 in enumerate(m1_array):
+        m2 = m2_array[i]
+        d = d_array[i]
+        spin1 = spin1_array[i]
+        spin2 = spin2_array[i]
+        pipe = {'t0': 10368000, 'dt': 0.25,'size': 10 * 3600 / 0.25,
+            't_inj': 5 * 3600, 'gw_beta': gw_beta_array[i], 'gw_lambda': gw_lambda_array[i]}
 
-            pipe = {
-                't0': 10368000,
-                'dt': 0.25,
-                'size': spec['size'] * 3600 / 0.25,
-                'gw_beta': 0,
-                'gw_lambda': np.pi / 7
-            }
-
-            for d in spec['drange']:
-                for spin in spin_arr:
-                    jobs.append((m1, m2, d, spin, spec, pipe))
+        jobs.append((m1, m2, d, spin1, spin2, pipe))
 
     # Create dataset
     if os.path.exists(gw_dataset_path):
         os.remove(gw_dataset_path)
 
-    h5file = create_dataset(gw_dataset_path, resolution=(512, 512))
+    h5file = create_dataset(gw_dataset_path, pipe['size'])
 
     n_workers = 6
     print(f"Running with {n_workers} workers")
 
-    with ProcessPoolExecutor(max_workers=n_workers) as executor:
-        futures = [executor.submit(run_one_sample, job) for job in jobs]
+    chunksize = 2  # start with 2 or 3
+    job_chunks = list(chunkify(jobs, chunksize))
 
-        for future in as_completed(futures):
-            varQT, m1, m2, d, spin = future.result()
-            append_gw_sample(h5file, varQT, m1, m2, d, spin)
+    total_chunks = len(job_chunks)
+    total_samples = len(jobs)
+
+    completed_samples = 0
+    with ProcessPoolExecutor(max_workers=n_workers) as executor:
+        futures = [executor.submit(run_chunk, chunk) for chunk in job_chunks]
+
+        for future in tqdm(as_completed(futures), total=total_chunks, desc="Chunks completed"):
+            results = future.result()
+            
+            completed_samples += len(results)
+            tqdm.write(f"Samples done: {completed_samples}/{total_samples}")
+            
+            for tdi_dict, m1, m2, d, spin1, spin2, gw_beta, gw_lambda in results:
+                append_gw_sample(h5file, tdi_dict, m1, m2, d, spin1, spin2, gw_beta, gw_lambda)
 
     h5file.close()
 

@@ -1,7 +1,7 @@
 import os
 import numpy as np
-from gw_shapes import ReducedOneSidedDoubleExpGW, BinaryInspiralGW
 
+from gw_shapes import ReducedOneSidedDoubleExpGW, BinaryInspiralGW
 from scipy.signal.windows import tukey
 from pytdi.michelson import X2, Y2, Z2
 from gwpy.timeseries import TimeSeries, TimeSeriesDict
@@ -9,9 +9,6 @@ from lisainstrument import Instrument
 from pytdi import Data
 
 from lisaglitch import RectangleGlitch, ShapeletGlitch, OneSidedDoubleExpGlitch, TwoSidedDoubleExpGlitch
-
-import warnings
-warnings.filterwarnings("ignore")
 
 def create_gws(gws, pipe, gw_path, orbits_path):
     if os.path.exists(gw_path):
@@ -83,7 +80,7 @@ def run_simulation(gws, glitches, pipe,
     
     lisa_instrument.write(simulation_path)
 
-def run_tdi(simulation_path, pipe, f_psd, psd):
+def run_tdi(simulation_path, pipe):
     channels = [X2, Y2, Z2]
     tdi_names = ["X", "Y", "Z"]
     tdi_dict = TimeSeriesDict()
@@ -98,20 +95,20 @@ def run_tdi(simulation_path, pipe, f_psd, psd):
         tdi_data = channel.build(**data.args)(data.measurements)
     
         # WINDOW TDI CHANNEL DATA
-        window = tukey(tdi_data.size, alpha=0.05)
-        signal = tdi_data * window
-        tdi_dict[tdi_names[i]] = TimeSeries(whiten_with_psd(np.array(signal), pipe['dt'], f_psd, psd), t0=pipe['t0'], dt=pipe['dt'])
+        #window = tukey(tdi_data.size, alpha=0.05)
+        #signal = tdi_data * window
+        tdi_dict[tdi_names[i]] = TimeSeries(tdi_data, t0=pipe['t0'], dt=pipe['dt'])
     
     return tdi_dict
 
-def whiten_with_psd(timeseries, dt, f_psd, psd):
-    N = len(timeseries)
+def whiten_with_psd(x, dt, f_psd, psd, apply_window=True, alpha=0.05):
+    if apply_window:
+        x = x * tukey(x.size, alpha=alpha)
 
     # FFT frequencies
-    freqs = np.fft.rfftfreq(N, dt)
-
+    freqs = np.fft.rfftfreq(x.size, dt)
     # FFT of data
-    data_fft = np.fft.rfft(timeseries)
+    data_fft = np.fft.rfft(x)
 
     # Interpolate PSD onto FFT grid
     psd_interp = np.interp(freqs, f_psd, psd)
@@ -123,6 +120,12 @@ def whiten_with_psd(timeseries, dt, f_psd, psd):
     white_fft = data_fft / np.sqrt(psd_interp)
 
     # Back to time domain
-    white = np.fft.irfft(white_fft, n=N)
+    white = np.fft.irfft(white_fft, n=x.size)
 
     return white
+
+def get_AET(X, Y, Z):
+    A = (Z - X)/np.sqrt(2)
+    E = (X - 2*Y + Z)/np.sqrt(6)
+    T = (X + Y + Z)/np.sqrt(3)
+    return A, E, T

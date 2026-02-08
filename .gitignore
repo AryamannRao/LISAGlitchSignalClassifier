@@ -6,10 +6,16 @@ __pycache__/
 venv/
 .env/
 
-# Data files (CRITICAL FOR YOU)
+# Data files
 data/
 datasets/
+dist/
 *.h5
+*.npz
+*.npy
+
+# Notebook checkpoints
+.ipynb_checkpoints/
 
 # Plots / outputs
 *.png
