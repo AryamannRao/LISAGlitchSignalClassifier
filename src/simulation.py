@@ -129,3 +129,6 @@ def get_AET(X, Y, Z):
     E = (X - 2*Y + Z)/np.sqrt(6)
     T = (X + Y + Z)/np.sqrt(3)
     return A, E, T
+
+def chirp_mass(m1, m2):
+    return (m1 * m2)**(3/5) / (m1 + m2)**(1/5)

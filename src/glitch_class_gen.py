@@ -8,8 +8,8 @@ import contextlib
 import numpy as np
 import time
 
-from simulation import *
-from h5file_helpers import *
+from simulation import run_simulation, run_tdi
+from h5file_helpers import create_dataset, append_gw_sample
 from config import *
 
 from concurrent.futures import ProcessPoolExecutor, as_completed
@@ -29,23 +29,13 @@ def suppress_output():
             sys.stderr = old_stderr
 
 def run_one_sample(args):
-    m1, m2, d, spin1, spin2, pipe = args
+    level, beta, inj_point, pipe = args
 
-    gws = [{
-        'type': 'BinaryInspiralGW',
-        'm1': m1,
-        'm2': m2,
-        'd': d,
-        'spin1': spin1,
-        'spin2': spin2,
-        't_inj': pipe['t_inj'],
-        'domain': 'freq'}]
+    gws = [{'type':'ReducedOneSidedDoubleExpGW', 't_inj': 0, 'amp':0, 't_rise':1, 't_fall':1}]
 
-    glitches = [{'type':'OneSidedDoubleExpGlitch', 't_inj': 0,
-             'level':0, 't_rise':1, 't_fall':1, 
-             'inj_point':'readout_tmi_carrier_12'}]
-
-
+    glitches = [{'type':'ShapeletGlitch', 't_inj': pipe['t_inj'], 'beta':beta,
+             'level':level, 'inj_point':inj_point}]
+    
     pid = os.getpid()
     local_sim_path = f"{simulation_path}_{pid}.h5"
     local_gw_path     = f"{gw_path}_{pid}.h5"
@@ -65,7 +55,7 @@ def run_one_sample(args):
     os.remove(local_gw_path)
     os.remove(local_glitch_path)
 
-    return tdi_dict, m1, m2, d, spin1, spin2, pipe['gw_beta'], pipe['gw_lambda']
+    return tdi_dict, level, beta, inj_point
 
 def run_chunk(job_chunk):
     results = []
@@ -82,51 +72,26 @@ def chunkify(lst, chunksize):
         yield lst[i:i + chunksize]
 
 def get_param_values(nsamples):
-    m1_array = 10**np.random.uniform(4, 7, size=nsamples)
-    m2_array = m1_array * np.random.uniform(1, 5, size=nsamples)
-    chirp_array = chirp_mass(m1_array, m2_array)
-
-    spin1_array = np.random.uniform(0, 0.9, size=nsamples)
-    spin2_array = spin1_array * np.random.choice([-1, 1], size=nsamples)
-
-    low = chirp_array < 1e5
-    med = (chirp_array >= 1e5) & (chirp_array <= 1e6)
-    high = chirp_array > 1e6
-
-    d_array = np.empty_like(m1_array, dtype=float)
-    d_array[low] = 10**np.random.uniform(3, 4, size=np.sum(low))
-    d_array[med] = 10**np.random.uniform(3, 5, size=np.sum(med))
-    d_array[high] = 10**np.random.uniform(4, 5, size=np.sum(high))
-
-    gw_beta_array = np.random.uniform(-np.pi/2, np.pi/2, size=nsamples)
-    gw_lambda_array = np.random.uniform(0, 2*np.pi, size=nsamples)
-
-    return m1_array, m2_array, d_array, spin1_array, spin2_array, gw_beta_array, gw_lambda_array
+    levels = np.random.uniform(1e-22, 1e-20, nsamples)
+    betas = np.random.uniform(0.5, 10, nsamples)
+    inj_points = np.random.choice(['tm_12', 'tm_23', 'tm_13'], nsamples)
+    return levels, betas, inj_points
 
 def main():
     start = time.time()
 
-    nsamples = 400
+    nsamples = 1000
+    levels, betas, inj_points = get_param_values(nsamples)
 
-    m1_array, m2_array, d_array, spin1_array, spin2_array, gw_beta_array, gw_lambda_array = get_param_values(nsamples)
+    pipe = {'t0': 10368000, 'dt': 0.25,'size': 10 * 3600 / 0.25, 't_inj': 5 * 3600}
 
-    # Prepare job list
-    jobs = []
+    jobs = [(levels[i], betas[i], inj_points[i], pipe) for i in range(nsamples)]
 
-    for i, m1 in enumerate(m1_array):
-        m2 = m2_array[i]
-        d = d_array[i]
-        spin1 = spin1_array[i]
-        spin2 = spin2_array[i]
-        pipe = {'t0': 10368000, 'dt': 0.25,'size': 10 * 3600 / 0.25,
-            't_inj': 5 * 3600, 'gw_beta': gw_beta_array[i], 'gw_lambda': gw_lambda_array[i]}
+    # Create dataset
+    if os.path.exists(glitch_dataset_path):
+        os.remove(glitch_dataset_path)
 
-        jobs.append((m1, m2, d, spin1, spin2, pipe))
-
-    if os.path.exists(gw_dataset_path):
-        os.remove(gw_dataset_path)
-    
-    h5file = create_dataset(gw_dataset_path, pipe['size'])
+    h5file = create_dataset(glitch_dataset_path, pipe['size'])
 
     n_workers = 6
     print(f"Running with {n_workers} workers")
@@ -146,11 +111,10 @@ def main():
             
             completed_samples += len(results)
             tqdm.write(f"Samples done: {completed_samples}/{total_samples}")
-            
-            for tdi_dict, m1, m2, d, spin1, spin2, gw_beta, gw_lambda in results:
-                append_gw_sample(h5file, tdi_dict, m1, m2, d, spin1, spin2, gw_beta, gw_lambda)
 
-    sort_gw_dataset(h5file)
+            for tdi_dict, level, beta, inj_point in results:
+                append_gw_sample(h5file, tdi_dict, level, beta, inj_point)
+    
     h5file.close()
 
     end = time.time()
