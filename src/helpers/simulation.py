@@ -1,7 +1,14 @@
 import os
 import numpy as np
+import sys
+from pathlib import Path
 
-from gw_shapes import ReducedOneSidedDoubleExpGW, BinaryInspiralGW
+# Ensure src is on Python path regardless of where code is run from
+SRC_ROOT = Path(__file__).resolve().parent.parent
+if str(SRC_ROOT) not in sys.path:
+    sys.path.insert(0, str(SRC_ROOT))
+
+from helpers.gw_shapes import ReducedOneSidedDoubleExpGW, BinaryInspiralGW
 from scipy.signal.windows import tukey
 from pytdi.michelson import X2, Y2, Z2
 from gwpy.timeseries import TimeSeries, TimeSeriesDict

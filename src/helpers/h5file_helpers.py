@@ -1,7 +1,13 @@
 import os
+import sys
 import h5py
 import numpy as np
-from simulation import chirp_mass
+from pathlib import Path
+# Ensure src is on Python path regardless of where code is run from
+SRC_ROOT = Path(__file__).resolve().parent.parent
+if str(SRC_ROOT) not in sys.path:
+    sys.path.insert(0, str(SRC_ROOT))
+from helpers.simulation import chirp_mass
 from config import *
 
 def create_dataset(dataset_path, siglen):
