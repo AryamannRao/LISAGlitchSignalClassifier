@@ -24,13 +24,13 @@ def create_gws(gws, pipe, gw_path, orbits_path):
         if gw['type'] == 'BinaryInspiralGW':
             gw = BinaryInspiralGW(m1=gw['m1'], m2=gw['m2'], d=gw['d'], t_inj=gw['t_inj'] + pipe['t0'],
                                   spin1 = gw['spin1'], spin2 = gw['spin2'],
-                        gw_beta=pipe['gw_beta'], gw_lambda=pipe['gw_lambda'], orbits=orbits_path,
+                        gw_beta=gw['gw_beta'], gw_lambda=gw['gw_lambda'], orbits=orbits_path,
                         dt=pipe['dt'], size=pipe['size'], t0=pipe['t0'], domain=gw['domain'])
 
             gw.write(path=gw_path, mode="a")
         elif gw['type'] == 'ReducedOneSidedDoubleExpGW':
             gw = ReducedOneSidedDoubleExpGW(t_inj=gw['t_inj'] + pipe['t0'], t_fall=gw['t_fall'],
-                    amp=gw['amp'], gw_beta=pipe['gw_beta'], gw_lambda=pipe['gw_lambda'], orbits=orbits_path,
+                    amp=gw['amp'], gw_beta=gw['gw_beta'], gw_lambda=gw['gw_lambda'], orbits=orbits_path,
                                             t0=pipe['t0'], size=pipe['size'], dt=pipe['dt'])
 
             gw.write(path=gw_path, mode="a")

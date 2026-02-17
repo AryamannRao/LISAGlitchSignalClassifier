@@ -14,8 +14,8 @@ SRC_ROOT = Path(__file__).resolve().parent.parent
 if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
-from helpers.simulation import run_simulation, run_tdi
-from helpers.h5file_helpers import create_glitch_dataset, append_glitch_sample
+from helpers.simulation import *
+from helpers.h5file_helpers import *
 from config import *
 
 from concurrent.futures import ProcessPoolExecutor, as_completed
@@ -35,23 +35,30 @@ def suppress_output():
             sys.stderr = old_stderr
 
 NSAMPLES = 10
+LOG_MASS_MIN, LOG_MASS_MAX = 4, 7
+
 LEVEL_MIN, LEVEL_MAX = 5e-6, 1e-5
 BETA_MIN, BETA_MAX = 500, 3600
 INJ_POINTS = ['tm_12', 'tm_23', 'tm_13',
               'tm_21', 'tm_32', 'tm_31']
+
+SEP_MIN, SEP_MAX = -1, 1
 PIPE = {'t0': 10368000, 'dt': 0.25,'size': 10 * 3600 / 0.25, 't_inj': 5 * 3600}
 
 N_WORKERS, CHUNKSIZE = 6, 2
 
 def run_one_sample(args):
-    level, beta, inj_point, pipe = args
+    m1, m2, d, spin1, spin2, gw_beta, gw_lambda, level, beta, inj_point, sep, pipe = args
 
-    gws = [{'type':'ReducedOneSidedDoubleExpGW', 't_inj': 0, 'amp':0, 't_rise':1, 't_fall':1,
-             'gw_beta':0, 'gw_lambda':0}]
+    gws = [{'type': 'BinaryInspiralGW',
+        'm1': m1, 'm2': m2, 'd': d,
+        'spin1': spin1, 'spin2': spin2,
+        'gw_beta': gw_beta, 'gw_lambda': gw_lambda,
+        't_inj': pipe['t_inj'] + sep * 3600, 'domain': 'freq'}]
 
-    glitches = [{'type':'ShapeletGlitch', 't_inj': pipe['t_inj'], 'beta':beta,
+    glitches = [{'type':'ShapeletGlitch', 't_inj': pipe['t_inj'] - sep * 3600, 'beta':beta,
              'level':level, 'inj_point':inj_point}]
-    
+
     pid = os.getpid()
     local_sim_path = f"{simulation_path}_{pid}.h5"
     local_gw_path     = f"{gw_path}_{pid}.h5"
@@ -71,7 +78,7 @@ def run_one_sample(args):
     os.remove(local_gw_path)
     os.remove(local_glitch_path)
 
-    return tdi_dict, level, beta, inj_point
+    return tdi_dict, m1, m2, d, spin1, spin2, gw_beta, gw_lambda, level, beta, inj_point, sep
 
 def run_chunk(job_chunk):
     results = []
@@ -88,23 +95,51 @@ def chunkify(lst, chunksize):
         yield lst[i:i + chunksize]
 
 def get_param_values(nsamples):
+    m1_array = 10**np.random.uniform(LOG_MASS_MIN, LOG_MASS_MAX, size=nsamples)
+    m2_array = m1_array * np.random.uniform(1, 5, size=nsamples)
+    chirp_array = chirp_mass(m1_array, m2_array)
+
+    spin1_array = np.random.uniform(0, 0.9, size=nsamples)
+    spin2_array = spin1_array * np.random.choice([-1, 1], size=nsamples)
+
+    low = chirp_array < 1e5
+    med = (chirp_array >= 1e5) & (chirp_array <= 1e6)
+    high = chirp_array > 1e6
+
+    d_array = np.empty_like(m1_array, dtype=float)
+    d_array[low] = 10**np.random.uniform(3, 4, size=np.sum(low))
+    d_array[med] = 10**np.random.uniform(3, 5, size=np.sum(med))
+    d_array[high] = 10**np.random.uniform(4, 5, size=np.sum(high))
+
+    gw_beta_array = np.random.uniform(-np.pi/2, np.pi/2, size=nsamples)
+    gw_lambda_array = np.random.uniform(0, 2*np.pi, size=nsamples)
+
     level_array = np.random.uniform(LEVEL_MIN, LEVEL_MAX, nsamples)
     beta_array = np.random.uniform(BETA_MIN, BETA_MAX, nsamples)
     inj_point_array = np.random.choice(INJ_POINTS, nsamples)
-    return level_array, beta_array, inj_point_array
+    sep_array = np.random.uniform(SEP_MIN, SEP_MAX, nsamples)
+
+    return m1_array, m2_array, d_array,\
+          spin1_array, spin2_array, gw_beta_array, gw_lambda_array,\
+            level_array, beta_array, inj_point_array, sep_array
 
 def main():
     start = time.time()
 
-    level_array, beta_array, inj_point_array = get_param_values(NSAMPLES)
+    m1_array, m2_array, d_array, spin1_array, spin2_array, gw_beta_array, gw_lambda_array,\
+         level_array, beta_array, inj_point_array, sep_array = get_param_values(NSAMPLES)
 
-    jobs = [(level_array[i], beta_array[i], inj_point_array[i], PIPE) for i in range(NSAMPLES)]
+    # Prepare job list
+    jobs = [(m1_array[i], m2_array[i], d_array[i], 
+             spin1_array[i], spin2_array[i], 
+             gw_beta_array[i], gw_lambda_array[i],
+             level_array[i], beta_array[i], inj_point_array[i],
+             sep_array[i], PIPE) for i in range(NSAMPLES)]
+
+    if os.path.exists(mixed_dataset_path):
+        os.remove(mixed_dataset_path)
     
-    # Create dataset
-    #if os.path.exists(glitch_dataset_path):
-     #   os.remove(glitch_dataset_path)
-
-    h5file = create_glitch_dataset(glitch_dataset_path, PIPE['size'])
+    h5file = create_mixed_dataset(mixed_dataset_path, PIPE['size'])
 
     print(f"Running with {N_WORKERS} workers")
 
@@ -122,10 +157,12 @@ def main():
             
             completed_samples += len(results)
             tqdm.write(f"Samples done: {completed_samples}/{total_samples}")
+            
+            for tdi_dict, m1, m2, d, spin1, spin2, gw_beta, gw_lambda, level, beta, inj_point, sep in results:
+                append_mixed_sample(h5file, tdi_dict, m1, m2, d, spin1, spin2, gw_beta, gw_lambda,
+                                    level, beta, inj_point, sep)
 
-            for tdi_dict, level, beta, inj_point in results:
-                append_glitch_sample(h5file, tdi_dict, level, beta, inj_point)
-    
+    sort_mixed_dataset(h5file)
     h5file.close()
 
     end = time.time()

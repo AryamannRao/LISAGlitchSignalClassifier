@@ -34,18 +34,19 @@ def suppress_output():
             sys.stdout = old_stdout
             sys.stderr = old_stderr
 
-def run_one_sample(args):
-    m1, m2, d, spin1, spin2, pipe = args
+NSAMPLES = 10
+LOG_MASS_MIN, LOG_MASS_MAX = 4, 7
+PIPE = {'t0': 10368000, 'dt': 0.25,'size': 10 * 3600 / 0.25, 't_inj': 5 * 3600}
+N_WORKERS, CHUNKSIZE = 6, 2
 
-    gws = [{
-        'type': 'BinaryInspiralGW',
-        'm1': m1,
-        'm2': m2,
-        'd': d,
-        'spin1': spin1,
-        'spin2': spin2,
-        't_inj': pipe['t_inj'],
-        'domain': 'freq'}]
+def run_one_sample(args):
+    m1, m2, d, spin1, spin2, gw_beta, gw_lambda, pipe = args
+
+    gws = [{'type': 'BinaryInspiralGW',
+        'm1': m1, 'm2': m2, 'd': d,
+        'spin1': spin1, 'spin2': spin2,
+        'gw_beta': gw_beta, 'gw_lambda': gw_lambda,
+        't_inj': pipe['t_inj'], 'domain': 'freq'}]
 
     glitches = [{'type':'OneSidedDoubleExpGlitch', 't_inj': 0,
              'level':0, 't_rise':1, 't_fall':1, 
@@ -71,7 +72,7 @@ def run_one_sample(args):
     os.remove(local_gw_path)
     os.remove(local_glitch_path)
 
-    return tdi_dict, m1, m2, d, spin1, spin2, pipe['gw_beta'], pipe['gw_lambda']
+    return tdi_dict, m1, m2, d, spin1, spin2, gw_beta, gw_lambda
 
 def run_chunk(job_chunk):
     results = []
@@ -88,7 +89,7 @@ def chunkify(lst, chunksize):
         yield lst[i:i + chunksize]
 
 def get_param_values(nsamples):
-    m1_array = 10**np.random.uniform(4, 7, size=nsamples)
+    m1_array = 10**np.random.uniform(LOG_MASS_MIN, LOG_MASS_MAX, size=nsamples)
     m2_array = m1_array * np.random.uniform(1, 5, size=nsamples)
     chirp_array = chirp_mass(m1_array, m2_array)
 
@@ -112,39 +113,27 @@ def get_param_values(nsamples):
 def main():
     start = time.time()
 
-    nsamples = 10
-
-    m1_array, m2_array, d_array, spin1_array, spin2_array, gw_beta_array, gw_lambda_array = get_param_values(nsamples)
+    m1_array, m2_array, d_array, spin1_array, spin2_array, gw_beta_array, gw_lambda_array = get_param_values(NSAMPLES)
 
     # Prepare job list
-    jobs = []
-
-    for i, m1 in enumerate(m1_array):
-        m2 = m2_array[i]
-        d = d_array[i]
-        spin1 = spin1_array[i]
-        spin2 = spin2_array[i]
-        pipe = {'t0': 10368000, 'dt': 0.25,'size': 10 * 3600 / 0.25,
-            't_inj': 5 * 3600, 'gw_beta': gw_beta_array[i], 'gw_lambda': gw_lambda_array[i]}
-
-        jobs.append((m1, m2, d, spin1, spin2, pipe))
+    jobs = [(m1_array[i], m2_array[i], d_array[i], 
+             spin1_array[i], spin2_array[i], 
+             gw_beta_array[i], gw_lambda_array[i], PIPE) for i in range(NSAMPLES)]
 
     if os.path.exists(gw_dataset_path):
         os.remove(gw_dataset_path)
     
-    h5file = create_dataset(gw_dataset_path, pipe['size'])
+    h5file = create_gw_dataset(gw_dataset_path, PIPE['size'])
 
-    n_workers = 6
-    print(f"Running with {n_workers} workers")
+    print(f"Running with {N_WORKERS} workers")
 
-    chunksize = 2  # start with 2 or 3
-    job_chunks = list(chunkify(jobs, chunksize))
+    job_chunks = list(chunkify(jobs, CHUNKSIZE))
 
     total_chunks = len(job_chunks)
     total_samples = len(jobs)
 
     completed_samples = 0
-    with ProcessPoolExecutor(max_workers=n_workers) as executor:
+    with ProcessPoolExecutor(max_workers=N_WORKERS) as executor:
         futures = [executor.submit(run_chunk, chunk) for chunk in job_chunks]
 
         for future in tqdm(as_completed(futures), total=total_chunks, desc="Chunks completed"):
