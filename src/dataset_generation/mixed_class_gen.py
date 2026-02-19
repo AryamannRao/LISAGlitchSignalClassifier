@@ -34,15 +34,15 @@ def suppress_output():
             sys.stdout = old_stdout
             sys.stderr = old_stderr
 
-NSAMPLES = 10
+NSAMPLES = 1000
 LOG_MASS_MIN, LOG_MASS_MAX = 4, 7
 
-LEVEL_MIN, LEVEL_MAX = 5e-6, 1e-5
+#LEVEL_MIN, LEVEL_MAX = 1e-6, 1e-5
 BETA_MIN, BETA_MAX = 500, 3600
 INJ_POINTS = ['tm_12', 'tm_23', 'tm_13',
               'tm_21', 'tm_32', 'tm_31']
 
-SEP_MIN, SEP_MAX = -1, 1
+SEP_MIN, SEP_MAX = -1.5, 1.5
 PIPE = {'t0': 10368000, 'dt': 0.25,'size': 10 * 3600 / 0.25, 't_inj': 5 * 3600}
 
 N_WORKERS, CHUNKSIZE = 6, 2
@@ -106,15 +106,15 @@ def get_param_values(nsamples):
     med = (chirp_array >= 1e5) & (chirp_array <= 1e6)
     high = chirp_array > 1e6
 
-    d_array = np.empty_like(m1_array, dtype=float)
-    d_array[low] = 10**np.random.uniform(3, 4, size=np.sum(low))
-    d_array[med] = 10**np.random.uniform(3, 5, size=np.sum(med))
-    d_array[high] = 10**np.random.uniform(4, 5, size=np.sum(high))
+    level_array = np.empty_like(m1_array, dtype=float)
+    level_array[low] = 10**np.random.uniform(-6, -5, size=np.sum(low))
+    level_array[med] = 10**np.random.uniform(-6, -5, size=np.sum(med))
+    level_array[high] = 10**np.random.uniform(np.log10(5e-7), np.log10(5e-6), size=np.sum(high))
 
+    d_array = 10**np.random.uniform(2.5, 4, size=nsamples)
     gw_beta_array = np.random.uniform(-np.pi/2, np.pi/2, size=nsamples)
     gw_lambda_array = np.random.uniform(0, 2*np.pi, size=nsamples)
 
-    level_array = np.random.uniform(LEVEL_MIN, LEVEL_MAX, nsamples)
     beta_array = np.random.uniform(BETA_MIN, BETA_MAX, nsamples)
     inj_point_array = np.random.choice(INJ_POINTS, nsamples)
     sep_array = np.random.uniform(SEP_MIN, SEP_MAX, nsamples)

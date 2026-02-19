@@ -14,8 +14,8 @@ SRC_ROOT = Path(__file__).resolve().parent.parent
 if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
-from helpers.simulation import run_simulation, run_tdi
-from helpers.h5file_helpers import create_glitch_dataset, append_glitch_sample
+from helpers.simulation import *
+from helpers.h5file_helpers import *
 from config import *
 
 from concurrent.futures import ProcessPoolExecutor, as_completed
@@ -35,23 +35,20 @@ def suppress_output():
             sys.stderr = old_stderr
 
 NSAMPLES = 1000
-LEVEL_MIN, LEVEL_MAX = 1e-6, 1e-5
-BETA_MIN, BETA_MAX = 500, 3600
-INJ_POINTS = ['tm_12', 'tm_23', 'tm_13',
-              'tm_21', 'tm_32', 'tm_31']
-PIPE = {'t0': 10368000, 'dt': 0.25,'size': 10 * 3600 / 0.25, 't_inj': 5 * 3600}
-
+PIPE = {'t0': 10368000, 'dt': 0.25,'size': 10 * 3600 / 0.25}
 N_WORKERS, CHUNKSIZE = 6, 2
 
 def run_one_sample(args):
-    level, beta, inj_point, pipe = args
+    pipe = args
 
     gws = [{'type':'ReducedOneSidedDoubleExpGW', 't_inj': 0, 'amp':0, 't_rise':1, 't_fall':1,
              'gw_beta':0, 'gw_lambda':0}]
 
-    glitches = [{'type':'ShapeletGlitch', 't_inj': pipe['t_inj'], 'beta':beta,
-             'level':level, 'inj_point':inj_point}]
-    
+    glitches = [{'type':'OneSidedDoubleExpGlitch', 't_inj': 0,
+             'level':0, 't_rise':1, 't_fall':1, 
+             'inj_point':'readout_tmi_carrier_12'}]
+
+
     pid = os.getpid()
     local_sim_path = f"{simulation_path}_{pid}.h5"
     local_gw_path     = f"{gw_path}_{pid}.h5"
@@ -71,7 +68,7 @@ def run_one_sample(args):
     os.remove(local_gw_path)
     os.remove(local_glitch_path)
 
-    return tdi_dict, level, beta, inj_point
+    return tdi_dict
 
 def run_chunk(job_chunk):
     results = []
@@ -87,24 +84,16 @@ def chunkify(lst, chunksize):
     for i in range(0, len(lst), chunksize):
         yield lst[i:i + chunksize]
 
-def get_param_values(nsamples):
-    level_array = 10**np.random.uniform(np.log10(LEVEL_MIN), np.log10(LEVEL_MAX), nsamples)
-    beta_array = np.random.uniform(BETA_MIN, BETA_MAX, nsamples)
-    inj_point_array = np.random.choice(INJ_POINTS, nsamples)
-    return level_array, beta_array, inj_point_array
-
 def main():
     start = time.time()
 
-    level_array, beta_array, inj_point_array = get_param_values(NSAMPLES)
-
-    jobs = [(level_array[i], beta_array[i], inj_point_array[i], PIPE) for i in range(NSAMPLES)]
+    jobs = [PIPE for i in range(NSAMPLES)]
     
     # Create dataset
-    #if os.path.exists(glitch_dataset_path):
-     #   os.remove(glitch_dataset_path)
+    #if os.path.exists(empty_dataset_path):
+     #   os.remove(empty_dataset_path)
 
-    h5file = create_glitch_dataset(glitch_dataset_path, PIPE['size'])
+    h5file = create_empty_dataset(empty_dataset_path, PIPE['size'])
 
     print(f"Running with {N_WORKERS} workers")
 
@@ -123,8 +112,8 @@ def main():
             completed_samples += len(results)
             tqdm.write(f"Samples done: {completed_samples}/{total_samples}")
 
-            for tdi_dict, level, beta, inj_point in results:
-                append_glitch_sample(h5file, tdi_dict, level, beta, inj_point)
+            for tdi_dict in results:
+                append_empty_sample(h5file, tdi_dict)
     
     h5file.close()
 

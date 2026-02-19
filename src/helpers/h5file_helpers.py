@@ -376,3 +376,63 @@ def sort_mixed_dataset(h5):
     append_mixed_sample(h5_ehm, tdi_dict_ehm, h5["m1"][ehm], h5["m2"][ehm], h5["d"][ehm],
                      h5["spin1"][ehm], h5["spin2"][ehm], h5["gw_beta"][ehm], h5["gw_lambda"][ehm],
                      h5["level"][ehm], h5["beta"][ehm], h5["inj_point"][ehm], h5["sep"][ehm])
+    
+def create_empty_dataset(dataset_path, siglen):
+    if not os.path.exists(dataset_path):
+        h5file = h5py.File(dataset_path, "w")
+        h5file.create_dataset(
+            "X", 
+            shape=(0, siglen),
+            maxshape=(None, siglen),  # unlimited along axis 0
+            dtype="float32",
+            chunks=(1, siglen),       # good practice
+            compression="gzip"
+        )
+
+        h5file.create_dataset(
+            "Y",
+            shape=(0, siglen),
+            maxshape=(None, siglen),
+            dtype="float32",
+            chunks=(1, siglen),
+            compression="gzip",
+        )
+        h5file.create_dataset(
+            "Z",
+            shape=(0, siglen),
+            maxshape=(None, siglen),
+            dtype="float32",
+            chunks=(1, siglen),
+            compression="gzip",
+        )
+    else:
+        h5file = h5py.File(dataset_path, "a")  # open in append mode
+
+    return h5file
+
+def append_empty_sample(h5, tdi_dict):
+    X = tdi_dict["X"]
+    Y = tdi_dict["Y"]
+    Z = tdi_dict["Z"]
+
+    n = h5["X"].shape[0]  # current length
+
+    X = np.atleast_2d(X)
+    Y = np.atleast_2d(Y)
+    Z = np.atleast_2d(Z)
+    
+    batch_size = X.shape[0]
+    
+    # current length
+    n = h5["X"].shape[0]
+    new_n = n + batch_size
+
+    # resize datasets
+    h5["X"].resize((new_n, X.shape[1]))
+    h5["Y"].resize((new_n, Y.shape[1]))
+    h5["Z"].resize((new_n, Z.shape[1]))
+
+    # store batch
+    h5["X"][n:new_n] = X.astype("float32")
+    h5["Y"][n:new_n] = Y.astype("float32")
+    h5["Z"][n:new_n] = Z.astype("float32")

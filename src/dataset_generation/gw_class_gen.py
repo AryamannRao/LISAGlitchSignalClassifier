@@ -34,7 +34,7 @@ def suppress_output():
             sys.stdout = old_stdout
             sys.stderr = old_stderr
 
-NSAMPLES = 10
+NSAMPLES = 1000
 LOG_MASS_MIN, LOG_MASS_MAX = 4, 7
 PIPE = {'t0': 10368000, 'dt': 0.25,'size': 10 * 3600 / 0.25, 't_inj': 5 * 3600}
 N_WORKERS, CHUNKSIZE = 6, 2
@@ -96,15 +96,15 @@ def get_param_values(nsamples):
     spin1_array = np.random.uniform(0, 0.9, size=nsamples)
     spin2_array = spin1_array * np.random.choice([-1, 1], size=nsamples)
 
-    low = chirp_array < 1e5
-    med = (chirp_array >= 1e5) & (chirp_array <= 1e6)
-    high = chirp_array > 1e6
+    #low = chirp_array < 1e5
+    #med = (chirp_array >= 1e5) & (chirp_array <= 1e6)
+    #high = chirp_array > 1e6
 
-    d_array = np.empty_like(m1_array, dtype=float)
-    d_array[low] = 10**np.random.uniform(3, 4, size=np.sum(low))
-    d_array[med] = 10**np.random.uniform(3, 5, size=np.sum(med))
-    d_array[high] = 10**np.random.uniform(4, 5, size=np.sum(high))
-
+    #d_array = np.empty_like(m1_array, dtype=float)
+    #d_array[low] = 10**np.random.uniform(3, 4, size=np.sum(low))
+    #d_array[med] = 10**np.random.uniform(3, 4, size=np.sum(med))
+    #d_array[high] = 10**np.random.uniform(3, 4, size=np.sum(high))
+    d_array = 10**np.random.uniform(2.5, 4, size=nsamples)
     gw_beta_array = np.random.uniform(-np.pi/2, np.pi/2, size=nsamples)
     gw_lambda_array = np.random.uniform(0, 2*np.pi, size=nsamples)
 
