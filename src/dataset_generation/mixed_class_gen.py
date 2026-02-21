@@ -43,7 +43,6 @@ INJ_POINTS = ['tm_12', 'tm_23', 'tm_13',
               'tm_21', 'tm_32', 'tm_31']
 
 SEP_MIN, SEP_MAX = -1.5, 1.5
-PIPE = {'t0': 10368000, 'dt': 0.25,'size': 10 * 3600 / 0.25, 't_inj': 5 * 3600}
 
 N_WORKERS, CHUNKSIZE = 6, 2
 

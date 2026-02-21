@@ -15,7 +15,7 @@ if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
 from helpers.simulation import run_simulation, run_tdi
-from helpers.h5file_helpers import create_glitch_dataset, append_glitch_sample
+from helpers.h5file_helpers import *
 from config import *
 
 from concurrent.futures import ProcessPoolExecutor, as_completed
@@ -39,7 +39,6 @@ LEVEL_MIN, LEVEL_MAX = 1e-6, 1e-5
 BETA_MIN, BETA_MAX = 500, 3600
 INJ_POINTS = ['tm_12', 'tm_23', 'tm_13',
               'tm_21', 'tm_32', 'tm_31']
-PIPE = {'t0': 10368000, 'dt': 0.25,'size': 10 * 3600 / 0.25, 't_inj': 5 * 3600}
 
 N_WORKERS, CHUNKSIZE = 6, 2
 
@@ -126,6 +125,7 @@ def main():
             for tdi_dict, level, beta, inj_point in results:
                 append_glitch_sample(h5file, tdi_dict, level, beta, inj_point)
     
+    sort_glitch_dataset(glitch_dataset_path)
     h5file.close()
 
     end = time.time()

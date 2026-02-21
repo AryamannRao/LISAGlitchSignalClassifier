@@ -35,7 +35,6 @@ def suppress_output():
             sys.stderr = old_stderr
 
 NSAMPLES = 1000
-PIPE = {'t0': 10368000, 'dt': 0.25,'size': 10 * 3600 / 0.25}
 N_WORKERS, CHUNKSIZE = 6, 2
 
 def run_one_sample(args):

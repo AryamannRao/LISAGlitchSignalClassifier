@@ -21,33 +21,34 @@ from config import *
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from tqdm import tqdm
 
-FILE_PATH = gw_ehm_dataset_path
+MASS_CATEGORY = 'low_mass'  # 'low_mass', 'high_mass', 'ext_high_mass'
+SPEC = SPECS[MASS_CATEGORY]
+
+if MASS_CATEGORY == 'low_mass':
+    FILE_PATH = empty_lm_dataset_path
+elif MASS_CATEGORY == 'high_mass':
+    FILE_PATH = empty_hm_dataset_path
+elif MASS_CATEGORY == 'ext_high_mass':
+    FILE_PATH = empty_ehm_dataset_path
+
 RESOLUTION = 256
 N_WORKERS, CHUNKSIZE = 6, 2
 REPRESENTATION = 'qscan'  # 'qscan' or 'varqscan'
 
 def run_one_sample(args):
-    m1, m2, tcen, X, Y, Z = args
+    X, Y, Z = args
     tdi_dict = make_tdi_dict(X, Y, Z)
-    chirp = chirp_mass(m1, m2)
-
-    if chirp < 1e5:
-        spec = SPECS['low_mass']
-    elif chirp < 1e6:
-        spec = SPECS['high_mass']
-    else:
-        spec = SPECS['ext_high_mass']
     
-    event = {'t_inj': PIPE['t_inj'] - tcen}
+    event = {'t_inj': PIPE['t_inj']}
 
     QT = np.zeros((RESOLUTION, RESOLUTION, 3))
     for channel in ['A', 'E', 'T']:
         if REPRESENTATION == 'varqscan':
             t_arr, f_arr, data = varq_transform(tdi_dict, channel, PIPE, event, resolution=RESOLUTION,
-                                        frange=spec['frange'], trange=spec['trange'], Qvals=spec['Qvals'])
+                                        frange=SPEC['frange'], trange=SPEC['trange'], Qvals=SPEC['Qvals'])
         elif REPRESENTATION == 'qscan':
             t_arr, f_arr, data = generate_qscan(tdi_dict, channel, PIPE, event, resolution=RESOLUTION,
-                             frange=spec['frange'], trange=spec['trange'], Q=spec['Q'])
+                             frange=SPEC['frange'], trange=SPEC['trange'], Q=SPEC['Q'])
 
         QT[:, :, ['A', 'E', 'T'].index(channel)] = data
 
@@ -74,14 +75,12 @@ def main():
         X_array = h5["X"][:]       # shape (N, 512, 512)
         Y_array = h5["Y"][:]       # shape (N, 512, 512)
         Z_array = h5["Z"][:]       # shape (N, 512, 512)
-        m1_array = h5["m1"][:]
-        m2_array = h5["m2"][:]
-    tcen_array = np.random.uniform(-2, 2, size=len(m1_array))*3600
+        
     h5.close()
 
     # Prepare job list
-    jobs = [(m1_array[i], m2_array[i], tcen_array[i], X_array[i], Y_array[i], Z_array[i])
-             for i in range(len(m1_array))]
+    jobs = [(X_array[i], Y_array[i], Z_array[i])
+             for i in range(len(X_array))]
     
     if REPRESENTATION == 'varqscan':
         keys = ['varQT', 't_varq', 'f_varq']
@@ -109,7 +108,7 @@ def main():
             
             for QT, t_arr, f_arr in results:
                 append_image(h5file, QT, t_arr, f_arr, keys=keys)
-
+    
     h5file.close()
 
     end = time.time()

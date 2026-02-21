@@ -36,7 +36,6 @@ def suppress_output():
 
 NSAMPLES = 1000
 LOG_MASS_MIN, LOG_MASS_MAX = 4, 7
-PIPE = {'t0': 10368000, 'dt': 0.25,'size': 10 * 3600 / 0.25, 't_inj': 5 * 3600}
 N_WORKERS, CHUNKSIZE = 6, 2
 
 def run_one_sample(args):

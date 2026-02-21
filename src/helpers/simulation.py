@@ -14,6 +14,7 @@ from pytdi.michelson import X2, Y2, Z2
 from gwpy.timeseries import TimeSeries, TimeSeriesDict
 from lisainstrument import Instrument
 from pytdi import Data
+from config import *
 
 from lisaglitch import RectangleGlitch, ShapeletGlitch, OneSidedDoubleExpGlitch, TwoSidedDoubleExpGlitch
 
@@ -139,3 +140,18 @@ def get_AET(X, Y, Z):
 
 def chirp_mass(m1, m2):
     return (m1 * m2)**(3/5) / (m1 + m2)**(1/5)
+
+def make_tdi_dict(X, Y, Z, whiten=True):
+    A, E, T = get_AET(X, Y, Z)
+
+    tdi_dict = {}
+    channel_names = ['X', 'Y', 'Z', 'A', 'E', 'T']
+    channel_data = [X, Y, Z, A, E, T]
+    for i, name in enumerate(channel_names):
+        if whiten:
+            psd_data = np.load(PSD_PATH / f'psd_{name}.npz')
+            f_psd, psd = psd_data['f_psd'], psd_data['psd']
+            tdi_dict[name] = whiten_with_psd(channel_data[i], dt=0.25, f_psd=f_psd, psd=psd, alpha=0.1)
+        else:
+            tdi_dict[name] = channel_data[i]
+    return tdi_dict
