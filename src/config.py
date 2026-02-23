@@ -20,6 +20,7 @@ GW_DATASETS = DIST / 'gw_datasets'
 GLITCH_DATASETS = DIST / 'glitch_datasets'
 MIXED_DATASETS = DIST / 'mixed_datasets'
 EMPTY_DATASETS = DIST / 'empty_datasets'
+TRAINING_DATASETS = DIST / 'training_datasets'
 PSD_PATH = DIST / 'psd_estimates'
 
 orbits_path = str(DIST / 'orbits.h5')
@@ -46,3 +47,7 @@ empty_dataset_path = str(EMPTY_DATASETS / 'empty_dataset.h5')
 empty_lm_dataset_path = str(EMPTY_DATASETS / 'empty_lm_dataset.h5')
 empty_hm_dataset_path = str(EMPTY_DATASETS / 'empty_hm_dataset.h5')
 empty_ehm_dataset_path = str(EMPTY_DATASETS / 'empty_ehm_dataset.h5')
+
+training_lm_dataset_path = str(TRAINING_DATASETS / 'training_lm_dataset.h5')
+training_hm_dataset_path = str(TRAINING_DATASETS / 'training_hm_dataset.h5')
+training_ehm_dataset_path = str(TRAINING_DATASETS / 'training_ehm_dataset.h5')

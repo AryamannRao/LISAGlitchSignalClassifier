@@ -21,7 +21,7 @@ from config import *
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from tqdm import tqdm
 
-MASS_CATEGORY = 'ext_high_mass'  # 'low_mass', 'high_mass', 'ext_high_mass'
+MASS_CATEGORY = 'low_mass'  # 'low_mass', 'high_mass', 'ext_high_mass'
 SPEC = SPECS[MASS_CATEGORY]
 
 if MASS_CATEGORY == 'low_mass':
