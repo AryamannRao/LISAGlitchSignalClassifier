@@ -14,7 +14,7 @@ from pytdi.michelson import X2, Y2, Z2
 from gwpy.timeseries import TimeSeries, TimeSeriesDict
 from lisainstrument import Instrument
 from pytdi import Data
-from config import *
+from helpers.config import *
 
 from lisaglitch import RectangleGlitch, ShapeletGlitch, OneSidedDoubleExpGlitch, TwoSidedDoubleExpGlitch
 

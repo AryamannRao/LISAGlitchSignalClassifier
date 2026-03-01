@@ -8,7 +8,7 @@ SRC_ROOT = Path(__file__).resolve().parent.parent
 if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 from helpers.simulation import chirp_mass
-from config import *
+from helpers.config import *
 
 def create_gw_dataset(dataset_path, siglen):
     #H, W = resolution

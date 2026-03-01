@@ -16,7 +16,7 @@ if str(SRC_ROOT) not in sys.path:
 
 from helpers.simulation import *
 from helpers.h5file_helpers import *
-from config import *
+from helpers.config import *
 
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from tqdm import tqdm

@@ -1,7 +1,7 @@
 from pathlib import Path
 import numpy as np
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
+PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 
 PIPE = {'t0': 10368000, 'dt': 0.25,'size': 10 * 3600 / 0.25, 't_inj': 5 * 3600}
 SPECS = {'low_mass': {'trange':(-3, 3), 'frange':(1e-3, 1e-1), 
@@ -16,14 +16,16 @@ SPECS = {'low_mass': {'trange':(-3, 3), 'frange':(1e-3, 1e-1),
 
 SRC = PROJECT_ROOT / 'src'
 DIST = PROJECT_ROOT / 'dist'
-GW_DATASETS = DIST / 'gw_datasets'
-GLITCH_DATASETS = DIST / 'glitch_datasets'
-MIXED_DATASETS = DIST / 'mixed_datasets'
-EMPTY_DATASETS = DIST / 'empty_datasets'
 TRAINING_DATASETS = DIST / 'training_datasets'
+TRAINING_RESULTS = DIST / 'training_results'
 PSD_PATH = DIST / 'psd_estimates'
 
-orbits_path = str(DIST / 'orbits.h5')
+GW_DATASETS = TRAINING_DATASETS / 'gw_datasets'
+GLITCH_DATASETS = TRAINING_DATASETS / 'glitch_datasets'
+MIXED_DATASETS = TRAINING_DATASETS / 'mixed_datasets'
+EMPTY_DATASETS = TRAINING_DATASETS / 'empty_datasets'
+
+orbits_path = str(DIST/ 'orbits' / 'orbits.h5')
 simulation_path = str(DIST / 'default_simulation_output.h5')
 
 glitch_path = str(DIST / 'default_glitch_output.h5')
