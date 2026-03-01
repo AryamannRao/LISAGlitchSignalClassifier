@@ -18,7 +18,7 @@ from torch.utils.data import random_split, DataLoader
 from model import CNN, LISADataset
 from helpers.config import *
 
-MASS_CATEGORY = 'low_mass'  # 'low_mass', 'high_mass', 'ext_high_mass'
+MASS_CATEGORY = 'ext_high_mass'  # 'low_mass', 'high_mass', 'ext_high_mass'
 
 if MASS_CATEGORY == 'low_mass':
     DATASET_PATH = training_lm_dataset_path
@@ -29,7 +29,7 @@ elif MASS_CATEGORY == 'ext_high_mass':
 
 SAVE_DIR = TRAINING_RESULTS / MASS_CATEGORY /f'run_{datetime.now().strftime("%d%m%y_%H%M%S")}'
 
-WIDTH = 8
+WIDTH = 6
 USE_BATCH_NORM = True
 BATCH_SIZE = 32
 LEARNING_RATE = 0.001

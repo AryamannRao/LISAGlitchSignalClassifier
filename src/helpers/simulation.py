@@ -25,49 +25,24 @@ def create_gws(gws, pipe, gw_path, orbits_path):
         if gw['type'] == 'BinaryInspiralGW':
             gw = BinaryInspiralGW(m1=gw['m1'], m2=gw['m2'], d=gw['d'], t_inj=gw['t_inj'] + pipe['t0'],
                                   spin1 = gw['spin1'], spin2 = gw['spin2'],
-                        gw_beta=gw['gw_beta'], gw_lambda=gw['gw_lambda'], orbits=orbits_path,
-                        dt=pipe['dt'], size=pipe['size'], t0=pipe['t0'], domain=gw['domain'])
+                        gw_beta=gw['gw_beta'], gw_lambda=gw['gw_lambda'], orbits=orbits_path, domain=gw['domain'])
 
-            gw.write(path=gw_path, mode="a")
+            gw.write(path=gw_path, mode="a", dt=pipe['dt'], size=pipe['size'], t0=pipe['t0'])
         elif gw['type'] == 'ReducedOneSidedDoubleExpGW':
             gw = ReducedOneSidedDoubleExpGW(t_inj=gw['t_inj'] + pipe['t0'], t_fall=gw['t_fall'],
-                    amp=gw['amp'], gw_beta=gw['gw_beta'], gw_lambda=gw['gw_lambda'], orbits=orbits_path,
-                                            t0=pipe['t0'], size=pipe['size'], dt=pipe['dt'])
+                    amp=gw['amp'], gw_beta=gw['gw_beta'], gw_lambda=gw['gw_lambda'], orbits=orbits_path)
 
-            gw.write(path=gw_path, mode="a")
+            gw.write(path=gw_path, mode="a", t0=pipe['t0'], size=pipe['size'], dt=pipe['dt'])
 
 def create_glitches(glitches, pipe, glitch_path):
     if os.path.exists(glitch_path):
         os.remove(glitch_path)
     for glitch in glitches:
-        if glitch['type'] == 'OneSidedDoubleExpGlitch':
-            glitch = OneSidedDoubleExpGlitch(inj_point=glitch['inj_point'], 
-                    t_inj=glitch['t_inj'] + pipe['t0'], t_rise=glitch['t_rise'], t_fall=glitch['t_fall'],
-                    level=glitch['level'], t0=pipe['t0'], size=pipe['size'], dt=pipe['dt'])
-
-            glitch.write(path=glitch_path, mode="a")
-
-        elif glitch['type'] == 'TwoSidedDoubleExpGlitch':
-            glitch = TwoSidedDoubleExpGlitch(inj_point=glitch['inj_point'], 
-                    t_inj=glitch['t_inj'] + pipe['t0'], t_rise=glitch['t_rise'], t_fall=glitch['t_fall'],
-                    level=glitch['level'], displacement = glitch['displacement'],
-                    t0=pipe['t0'], size=pipe['size'], dt=pipe['dt'])
-
-            glitch.write(path=glitch_path, mode="a")
-
-        elif glitch['type'] == 'RectangleGlitch':
-            glitch = RectangleGlitch(width=glitch['width'], 
-                    t_inj=glitch['t_inj'] + pipe['t0'], level=glitch['level'],
-                        inj_point=glitch['inj_point'], t0=pipe['t0'], size=pipe['size'], dt=pipe['dt'])
-
-            glitch.write(path=glitch_path, mode="a")
-
-        elif glitch['type'] == 'ShapeletGlitch':
+        if glitch['type'] == 'ShapeletGlitch':
             glitch = ShapeletGlitch(level=glitch['level'], beta=glitch['beta'], 
-                                    inj_point=glitch['inj_point'], t_inj=glitch['t_inj'] + pipe['t0'],
-                                   t0=pipe['t0'], size=pipe['size'], dt=pipe['dt'])
+                                    inj_point=glitch['inj_point'], t_inj=glitch['t_inj'] + pipe['t0'])
 
-            glitch.write(path=glitch_path, mode="a")
+            glitch.write(path=glitch_path, mode="a", t0=pipe['t0'], size=pipe['size'], dt=pipe['dt'])
 
 def run_simulation(gws, glitches, pipe, 
                    gw_path, glitch_path, orbits_path, 
