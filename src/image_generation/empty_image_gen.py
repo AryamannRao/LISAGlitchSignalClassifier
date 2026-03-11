@@ -71,23 +71,34 @@ def chunkify(lst, chunksize):
 def main():
     start = time.time()
 
-    with h5py.File(FILE_PATH, "r") as h5:
-        X_array = h5["X"][:]       # shape (N, 512, 512)
-        Y_array = h5["Y"][:]       # shape (N, 512, 512)
-        Z_array = h5["Z"][:]       # shape (N, 512, 512)
-        
-    h5.close()
-
-    # Prepare job list
-    jobs = [(X_array[i], Y_array[i], Z_array[i])
-             for i in range(len(X_array))]
-    
     if REPRESENTATION == 'varqscan':
         keys = ['varQT', 't_varq', 'f_varq']
     elif REPRESENTATION == 'qscan':
         keys = ['QT', 't_qscan', 'f_qscan']
 
-    h5file = create_imageset(FILE_PATH, RESOLUTION, keys=keys)
+    h5file = h5py.File(FILE_PATH, "r+")
+    if keys[0] not in h5file:
+        h5file.close()
+        h5file = create_imageset(FILE_PATH, RESOLUTION, keys=keys)
+
+    else:
+        n_images = h5file[keys[0]].shape[0]
+        n_signals = h5file["X"].shape[0]
+
+        # If all signals already have images, exit early
+        if n_images >= n_signals:
+            print("All signals already have generated images. Nothing to do.")
+            h5file.close()
+            return
+
+        # Otherwise continue from where we left off
+        X_array = h5file["X"][n_images:]
+        Y_array = h5file["Y"][n_images:]
+        Z_array = h5file["Z"][n_images:]
+
+    # Prepare job list
+    jobs = [(X_array[i], Y_array[i], Z_array[i])
+             for i in range(len(X_array))]
 
     print(f"Running with {N_WORKERS} workers")
 

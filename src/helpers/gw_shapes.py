@@ -1,10 +1,3 @@
-"""
-Filename: gw_shapes.py
-Author: William Mostrenko
-Created: 2025-08-07
-Description: Classes for gravitational wave shapes.
-"""
-
 import numpy as np
 from scipy.optimize import fsolve
 from scipy.interpolate import interp1d

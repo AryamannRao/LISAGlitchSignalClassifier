@@ -240,6 +240,88 @@ def sort_glitch_dataset(h5):
     append_glitch_sample(h5_hm, tdi_dict_hm, h5["level"][hm], h5["beta"][hm], h5["inj_point"][hm])
     append_glitch_sample(h5_ehm, tdi_dict_ehm, h5["level"][ehm], h5["beta"][ehm], h5["inj_point"][ehm])
 
+def create_realglitch_dataset(dataset_path, siglen):
+    if not os.path.exists(dataset_path):
+        h5file = h5py.File(dataset_path, "w")
+        h5file.create_dataset(
+            "X", 
+            shape=(0, siglen),
+            maxshape=(None, siglen),  # unlimited along axis 0
+            dtype="float32",
+            chunks=(1, siglen),       # good practice
+            compression="gzip"
+        )
+
+        h5file.create_dataset(
+            "Y",
+            shape=(0, siglen),
+            maxshape=(None, siglen),
+            dtype="float32",
+            chunks=(1, siglen),
+            compression="gzip",
+        )
+        h5file.create_dataset(
+            "Z",
+            shape=(0, siglen),
+            maxshape=(None, siglen),
+            dtype="float32",
+            chunks=(1, siglen),
+            compression="gzip",
+        )
+
+        h5file.create_dataset(
+            "run",   shape=(0,), maxshape=(None,), dtype="float32"
+        )
+        h5file.create_dataset(
+            "index",   shape=(0,), maxshape=(None,), dtype="float32"
+        )
+        h5file.create_dataset(
+            "inj_point",   shape=(0,), maxshape=(None,), dtype=h5py.string_dtype(encoding="utf-8")
+        )
+    else:
+        h5file = h5py.File(dataset_path, "a")  # open in append mode
+
+    return h5file
+
+def append_realglitch_sample(h5, tdi_dict, run, index, inj_point):
+    X = tdi_dict["X"]
+    Y = tdi_dict["Y"]
+    Z = tdi_dict["Z"]
+
+    n = h5["X"].shape[0]  # current length
+
+    X = np.atleast_2d(X)
+    Y = np.atleast_2d(Y)
+    Z = np.atleast_2d(Z)
+
+    run = np.atleast_1d(run)
+    index = np.atleast_1d(index)
+    inj_point = np.atleast_1d(inj_point)
+    
+    batch_size = X.shape[0]
+    
+    # current length
+    n = h5["X"].shape[0]
+    new_n = n + batch_size
+
+    # resize datasets
+    h5["X"].resize((new_n, X.shape[1]))
+    h5["Y"].resize((new_n, Y.shape[1]))
+    h5["Z"].resize((new_n, Z.shape[1]))
+
+    h5["run"].resize((new_n,))
+    h5["index"].resize((new_n,))
+    h5["inj_point"].resize((new_n,))
+
+    # store batch
+    h5["X"][n:new_n] = X.astype("float32")
+    h5["Y"][n:new_n] = Y.astype("float32")
+    h5["Z"][n:new_n] = Z.astype("float32")
+
+    h5["run"][n:new_n] = run
+    h5["index"][n:new_n] = index
+    h5["inj_point"][n:new_n] = inj_point
+
 def create_mixed_dataset(dataset_path, siglen):
     if not os.path.exists(dataset_path):
         h5file = h5py.File(dataset_path, "w")
@@ -479,12 +561,6 @@ def sort_empty_dataset(h5):
 def create_imageset(dataset_path, resolution, keys):
     image_key, tarr_key, farr_key = keys
     h5file = h5py.File(dataset_path, "a")
-    if image_key in h5file:
-        del h5file[image_key]
-    if tarr_key in h5file:
-        del h5file[tarr_key]
-    if farr_key in h5file:
-        del h5file[farr_key]
 
     h5file.create_dataset(
         image_key, 
@@ -500,10 +576,15 @@ def create_imageset(dataset_path, resolution, keys):
     h5file.create_dataset(
         farr_key,   shape=(0, resolution), maxshape=(None, resolution), dtype="float32"
     )
+    h5file.create_dataset(
+    "tcen",
+    shape=(0,),
+    maxshape=(None,),
+    dtype="float32")
 
     return h5file
 
-def append_image(h5, image, t_arr, f_arr, keys):
+def append_image(h5, image, t_arr, f_arr, tcen, keys):
     image_key, tarr_key, farr_key = keys
     n = h5[image_key].shape[0]  # current length
 
@@ -511,6 +592,7 @@ def append_image(h5, image, t_arr, f_arr, keys):
         image = np.expand_dims(image, axis=0)
     t_arr = np.atleast_2d(t_arr)
     f_arr = np.atleast_2d(f_arr)
+    tcen = np.atleast_1d(tcen)
     
     batch_size = image.shape[0]
     
@@ -522,8 +604,10 @@ def append_image(h5, image, t_arr, f_arr, keys):
     h5[image_key].resize((new_n, image.shape[1], image.shape[2], image.shape[3]))
     h5[tarr_key].resize((new_n, t_arr.shape[1]))
     h5[farr_key].resize((new_n, f_arr.shape[1]))
+    h5["tcen"].resize((new_n,))
 
     # store batch
     h5[image_key][n:new_n] = image.astype("float32")
     h5[tarr_key][n:new_n] = t_arr.astype("float32")
     h5[farr_key][n:new_n] = f_arr.astype("float32")
+    h5["tcen"][n:new_n] = tcen.astype("float32")

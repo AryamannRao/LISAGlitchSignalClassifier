@@ -119,8 +119,8 @@ def main():
              spin1_array[i], spin2_array[i], 
              gw_beta_array[i], gw_lambda_array[i], PIPE) for i in range(NSAMPLES)]
 
-    if os.path.exists(gw_dataset_path):
-        os.remove(gw_dataset_path)
+    #if os.path.exists(gw_dataset_path):
+     #   os.remove(gw_dataset_path)
     
     h5file = create_gw_dataset(gw_dataset_path, PIPE['size'])
 

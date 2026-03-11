@@ -31,9 +31,11 @@ SAVE_DIR = TRAINING_RESULTS / MASS_CATEGORY /f'run_{datetime.now().strftime("%d%
 
 WIDTH = 8
 USE_BATCH_NORM = True
-BATCH_SIZE = 32
+NORMALISE = False
+BATCH_SIZE = 64
 LEARNING_RATE = 0.001
-NUM_EPOCHS = 9
+NUM_EPOCHS = 8
+DROP = 0.0
 
 PLOT_EVERY = 2
 PRINT_EVERY = 15
@@ -140,7 +142,7 @@ def plot_results(results):
     final_val_hard_acc = val_hard_acc[-1]
 
     fig, axes = plt.subplots(3, 1, figsize=(12, 15), constrained_layout=True)
-    title = f"Model used: CNN (width={WIDTH}, batch norm={USE_BATCH_NORM})\n" +\
+    title = f"Model used: CNN (width={WIDTH}, batch norm={USE_BATCH_NORM}, norm={NORMALISE}, drop={DROP})\n" +\
     f"Training curve (batch size={BATCH_SIZE}, learning rate={LEARNING_RATE}, num epochs={NUM_EPOCHS})\n" +\
     f"Final Train Soft Acc: {final_train_soft_acc:.3f}, Final Val Soft Acc: {final_val_soft_acc:.3f},\n" +\
     f" Final Train Hard Acc: {final_train_hard_acc:.3f}, Final Val Hard Acc: {final_val_hard_acc:.3f}, \n" +\
@@ -170,7 +172,7 @@ def plot_results(results):
     plt.savefig(SAVE_DIR / 'training_curves.png')
 
 def main():
-    model = CNN(width=WIDTH, bn=USE_BATCH_NORM)
+    model = CNN(width=WIDTH, bn=USE_BATCH_NORM, normalise=NORMALISE, drop=DROP)
     dataset = LISADataset(DATASET_PATH)
     if not os.path.exists(SAVE_DIR):
         SAVE_DIR.mkdir(parents=True, exist_ok=True)
@@ -180,8 +182,10 @@ def main():
     val_size   = int(0.2 * N)
     test_size  = N - train_size - val_size
 
+    generator = torch.Generator().manual_seed(42)
     train_dataset, val_dataset, test_dataset = random_split(
-        dataset, [train_size, val_size, test_size])
+        dataset, [train_size, val_size, test_size], generator=generator)
+    
     results = train_model(model, train_dataset, val_dataset, test_dataset,
                         batch_size=BATCH_SIZE, learning_rate=LEARNING_RATE, 
                         num_epochs=NUM_EPOCHS, plot_every=PLOT_EVERY, print_every=PRINT_EVERY)

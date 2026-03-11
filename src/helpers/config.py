@@ -18,12 +18,14 @@ SRC = PROJECT_ROOT / 'src'
 DIST = PROJECT_ROOT / 'dist'
 TRAINING_DATASETS = DIST / 'training_datasets'
 TRAINING_RESULTS = DIST / 'training_results'
+INFERENCE_DATASETS = DIST / 'inference_datasets'
 PSD_PATH = DIST / 'psd_estimates'
 
 GW_DATASETS = TRAINING_DATASETS / 'gw_datasets'
 GLITCH_DATASETS = TRAINING_DATASETS / 'glitch_datasets'
 MIXED_DATASETS = TRAINING_DATASETS / 'mixed_datasets'
 EMPTY_DATASETS = TRAINING_DATASETS / 'empty_datasets'
+LPF_DATASETS = INFERENCE_DATASETS / 'lpf_datasets'
 
 orbits_path = str(DIST/ 'orbits' / 'orbits.h5')
 simulation_path = str(DIST / 'default_simulation_output.h5')
@@ -33,6 +35,10 @@ glitch_dataset_path = str(GLITCH_DATASETS / 'glitch_dataset.h5')
 glitch_lm_dataset_path = str(GLITCH_DATASETS / 'glitch_lm_dataset.h5')
 glitch_hm_dataset_path = str(GLITCH_DATASETS / 'glitch_hm_dataset.h5')
 glitch_ehm_dataset_path = str(GLITCH_DATASETS / 'glitch_ehm_dataset.h5')
+
+lpf_library_path = str(LPF_DATASETS / 'lpf-glitch-library.h5')
+lpf_ord_param_path = str(LPF_DATASETS / 'glitch_params_ordinary.txt')
+lpf_cold_param_path = str(LPF_DATASETS / 'glitch_params_cold.txt')
 
 gw_path = str(DIST / 'default_gw_output.h5')
 gw_dataset_path = str(GW_DATASETS / 'gw_dataset.h5')

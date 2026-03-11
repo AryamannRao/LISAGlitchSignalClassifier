@@ -21,15 +21,18 @@ from helpers.config import *
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from tqdm import tqdm
 
-MASS_CATEGORY = 'ext_high_mass'  # 'low_mass', 'high_mass', 'ext_high_mass'
+MASS_CATEGORY = 'low_mass'  # 'low_mass', 'high_mass', 'ext_high_mass'
 SPEC = SPECS[MASS_CATEGORY]
 
 if MASS_CATEGORY == 'low_mass':
     FILE_PATH = glitch_lm_dataset_path
+ #   FILE_PATH = str(TRAINING_DATASETS / 'glitch_datasets'/ 'real_glitch_lm_dataset.h5')
 elif MASS_CATEGORY == 'high_mass':
     FILE_PATH = glitch_hm_dataset_path
+ #   FILE_PATH = str(TRAINING_DATASETS / 'glitch_datasets'/ 'real_glitch_hm_dataset.h5')
 elif MASS_CATEGORY == 'ext_high_mass':
     FILE_PATH = glitch_ehm_dataset_path
+ #   FILE_PATH = str(TRAINING_DATASETS / 'glitch_datasets'/ 'real_glitch_ehm_dataset.h5')
 
 RESOLUTION = 256
 N_WORKERS, CHUNKSIZE = 6, 2
@@ -52,7 +55,7 @@ def run_one_sample(args):
 
         QT[:, :, ['A', 'E', 'T'].index(channel)] = data
 
-    return QT, t_arr, f_arr
+    return QT, t_arr, f_arr, tcen
 
 def run_chunk(job_chunk):
     results = []
@@ -71,24 +74,41 @@ def chunkify(lst, chunksize):
 def main():
     start = time.time()
 
-    with h5py.File(FILE_PATH, "r") as h5:
-        X_array = h5["X"][:]       # shape (N, 512, 512)
-        Y_array = h5["Y"][:]       # shape (N, 512, 512)
-        Z_array = h5["Z"][:]       # shape (N, 512, 512)
-        
-    tcen_array = np.random.uniform(-2, 2, size=len(X_array))*3600
-    h5.close()
-
-    # Prepare job list
-    jobs = [(tcen_array[i], X_array[i], Y_array[i], Z_array[i])
-             for i in range(len(X_array))]
-    
     if REPRESENTATION == 'varqscan':
         keys = ['varQT', 't_varq', 'f_varq']
     elif REPRESENTATION == 'qscan':
         keys = ['QT', 't_qscan', 'f_qscan']
 
-    h5file = create_imageset(FILE_PATH, RESOLUTION, keys=keys)
+    h5file = h5py.File(FILE_PATH, "r+")
+    if keys[0] not in h5file:
+        h5file.close()
+        h5file = create_imageset(FILE_PATH, RESOLUTION, keys=keys)
+        # Otherwise continue from where we left off
+        X_array = h5file["X"][:]
+        Y_array = h5file["Y"][:]
+        Z_array = h5file["Z"][:]
+
+    else:
+        n_images = h5file[keys[0]].shape[0]
+        n_signals = h5file["X"].shape[0]
+
+        # If all signals already have images, exit early
+        if n_images >= n_signals:
+            print("All signals already have generated images. Nothing to do.")
+            h5file.close()
+            return
+
+        # Otherwise continue from where we left off
+        X_array = h5file["X"][n_images:]
+        Y_array = h5file["Y"][n_images:]
+        Z_array = h5file["Z"][n_images:]
+        
+    #np.random.seed(42)
+    tcen_array = np.random.uniform(-2, 2, size=len(X_array))*3600
+
+    # Prepare job list
+    jobs = [(tcen_array[i], X_array[i], Y_array[i], Z_array[i])
+             for i in range(len(X_array))]
 
     print(f"Running with {N_WORKERS} workers")
 
@@ -101,14 +121,14 @@ def main():
     with ProcessPoolExecutor(max_workers=N_WORKERS) as executor:
         futures = [executor.submit(run_chunk, chunk) for chunk in job_chunks]
 
-        for future in tqdm(as_completed(futures), total=total_chunks, desc="Chunks completed"):
+        for future in tqdm(futures, total=total_chunks, desc="Chunks completed"):
             results = future.result()
             
             completed_samples += len(results)
             tqdm.write(f"Samples done: {completed_samples}/{total_samples}")
             
-            for QT, t_arr, f_arr in results:
-                append_image(h5file, QT, t_arr, f_arr, keys=keys)
+            for QT, t_arr, f_arr, tcen in results:
+                append_image(h5file, QT, t_arr, f_arr, tcen, keys=keys)
     
     h5file.close()
 

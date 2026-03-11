@@ -15,8 +15,9 @@ from gwpy.timeseries import TimeSeries, TimeSeriesDict
 from lisainstrument import Instrument
 from pytdi import Data
 from helpers.config import *
+from helpers.glitch_shapes import *
 
-from lisaglitch import RectangleGlitch, ShapeletGlitch, OneSidedDoubleExpGlitch, TwoSidedDoubleExpGlitch
+from lisaglitch import ShapeletGlitch, OneSidedDoubleExpGlitch, LPFLibraryGlitch
 
 def create_gws(gws, pipe, gw_path, orbits_path):
     if os.path.exists(gw_path):
@@ -47,26 +48,17 @@ def create_glitches(glitches, pipe, glitch_path):
 
             glitch.write(path=glitch_path, mode="a")
 
-        elif glitch['type'] == 'TwoSidedDoubleExpGlitch':
-            glitch = TwoSidedDoubleExpGlitch(inj_point=glitch['inj_point'], 
-                    t_inj=glitch['t_inj'] + pipe['t0'], t_rise=glitch['t_rise'], t_fall=glitch['t_fall'],
-                    level=glitch['level'], displacement = glitch['displacement'],
-                    t0=pipe['t0'], size=pipe['size'], dt=pipe['dt'])
-
-            glitch.write(path=glitch_path, mode="a")
-
-        elif glitch['type'] == 'RectangleGlitch':
-            glitch = RectangleGlitch(width=glitch['width'], 
-                    t_inj=glitch['t_inj'] + pipe['t0'], level=glitch['level'],
-                        inj_point=glitch['inj_point'], t0=pipe['t0'], size=pipe['size'], dt=pipe['dt'])
-
-            glitch.write(path=glitch_path, mode="a")
-
         elif glitch['type'] == 'ShapeletGlitch':
             glitch = ShapeletGlitch(level=glitch['level'], beta=glitch['beta'], 
                                     inj_point=glitch['inj_point'], t_inj=glitch['t_inj'] + pipe['t0'],
                                    t0=pipe['t0'], size=pipe['size'], dt=pipe['dt'])
 
+            glitch.write(path=glitch_path, mode="a")
+        
+        elif glitch['type'] == 'RealGlitch':
+            glitch = RealGlitch(inj_point=glitch['inj_point'], t0=pipe['t0'], scale=glitch['scale'],
+                                       t_inj=glitch['t_inj'] + pipe['t0'], run=glitch['run'], index=glitch['index'])
+            
             glitch.write(path=glitch_path, mode="a")
 
 def run_simulation(gws, glitches, pipe, 

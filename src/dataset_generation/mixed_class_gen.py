@@ -37,8 +37,7 @@ def suppress_output():
 NSAMPLES = 1000
 LOG_MASS_MIN, LOG_MASS_MAX = 4, 7
 
-#LEVEL_MIN, LEVEL_MAX = 1e-6, 1e-5
-BETA_MIN, BETA_MAX = 500, 3600
+SCALE = 1e5
 INJ_POINTS = ['tm_12', 'tm_23', 'tm_13',
               'tm_21', 'tm_32', 'tm_31']
 
@@ -96,26 +95,24 @@ def chunkify(lst, chunksize):
 def get_param_values(nsamples):
     m1_array = 10**np.random.uniform(LOG_MASS_MIN, LOG_MASS_MAX, size=nsamples)
     m2_array = m1_array * np.random.uniform(1, 5, size=nsamples)
-    chirp_array = chirp_mass(m1_array, m2_array)
 
     spin1_array = np.random.uniform(0, 0.9, size=nsamples)
     spin2_array = spin1_array * np.random.choice([-1, 1], size=nsamples)
 
-    low = chirp_array < 1e5
-    med = (chirp_array >= 1e5) & (chirp_array <= 1e6)
-    high = chirp_array > 1e6
+    params = np.loadtxt(lpf_ord_param_path, skiprows=1)
+    params = np.vstack((np.log10(params[:, 0]), np.log10(SCALE*np.abs(params[:, 1])))).T
+    mu = np.mean(params, axis=0)
+    cov = np.cov(params, rowvar=False)
 
-    level_array = np.empty_like(m1_array, dtype=float)
-    level_array[low] = 10**np.random.uniform(-6, -5, size=np.sum(low))
-    level_array[med] = 10**np.random.uniform(-6, -5, size=np.sum(med))
-    level_array[high] = 10**np.random.uniform(np.log10(5e-7), np.log10(5e-6), size=np.sum(high))
+    samples = np.random.multivariate_normal(mu, cov, size=nsamples)
+    beta_array = 10**samples[:,0]
+    level_array  = 10**samples[:,1]
+    inj_point_array = np.random.choice(INJ_POINTS, nsamples)
 
     d_array = 10**np.random.uniform(2.5, 4, size=nsamples)
     gw_beta_array = np.random.uniform(-np.pi/2, np.pi/2, size=nsamples)
     gw_lambda_array = np.random.uniform(0, 2*np.pi, size=nsamples)
 
-    beta_array = np.random.uniform(BETA_MIN, BETA_MAX, nsamples)
-    inj_point_array = np.random.choice(INJ_POINTS, nsamples)
     sep_array = np.random.uniform(SEP_MIN, SEP_MAX, nsamples)
 
     return m1_array, m2_array, d_array,\
@@ -135,8 +132,8 @@ def main():
              level_array[i], beta_array[i], inj_point_array[i],
              sep_array[i], PIPE) for i in range(NSAMPLES)]
 
-    if os.path.exists(mixed_dataset_path):
-        os.remove(mixed_dataset_path)
+    #if os.path.exists(mixed_dataset_path):
+     #   os.remove(mixed_dataset_path)
     
     h5file = create_mixed_dataset(mixed_dataset_path, PIPE['size'])
 

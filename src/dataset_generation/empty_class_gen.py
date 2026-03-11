@@ -114,8 +114,9 @@ def main():
             for tdi_dict in results:
                 append_empty_sample(h5file, tdi_dict)
     
+    sort_empty_dataset(h5file)
     h5file.close()
-
+    
     end = time.time()
     print(f"Total time taken: {end - start:.2f} seconds")
 
