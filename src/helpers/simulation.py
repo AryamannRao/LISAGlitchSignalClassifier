@@ -17,7 +17,7 @@ from pytdi import Data
 from helpers.config import *
 from helpers.glitch_shapes import *
 
-from lisaglitch import ShapeletGlitch, OneSidedDoubleExpGlitch, LPFLibraryGlitch
+from lisaglitch import ShapeletGlitch, OneSidedDoubleExpGlitch, LPFLibraryGlitch, IntegratedShapeletGlitch
 
 def create_gws(gws, pipe, gw_path, orbits_path):
     if os.path.exists(gw_path):
@@ -50,6 +50,13 @@ def create_glitches(glitches, pipe, glitch_path):
 
         elif glitch['type'] == 'ShapeletGlitch':
             glitch = ShapeletGlitch(level=glitch['level'], beta=glitch['beta'], 
+                                    inj_point=glitch['inj_point'], t_inj=glitch['t_inj'] + pipe['t0'],
+                                   t0=pipe['t0'], size=pipe['size'], dt=pipe['dt'])
+
+            glitch.write(path=glitch_path, mode="a")
+        
+        elif glitch['type'] == 'IntegratedShapeletGlitch':
+            glitch = IntegratedShapeletGlitch(level=glitch['level'], beta=glitch['beta'], 
                                     inj_point=glitch['inj_point'], t_inj=glitch['t_inj'] + pipe['t0'],
                                    t0=pipe['t0'], size=pipe['size'], dt=pipe['dt'])
 

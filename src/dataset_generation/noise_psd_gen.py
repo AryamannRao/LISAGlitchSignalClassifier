@@ -1,7 +1,7 @@
 import numpy as np
 from scipy.signal import welch
-from config import *
-from simulation import *
+from helpers.config import *
+from helpers.simulation import *
 
 def estimate_psd(data, sample_freq, nperseg, noverlap=None):
     
@@ -38,11 +38,11 @@ def main():
     channels = [X, Y, Z, A, E, T]
     channel_names = ['X', 'Y', 'Z', 'A', 'E', 'T']
 
-    if os.path.exists(psd_path) == False:
-        os.makedirs(psd_path)
+    if os.path.exists(PSD_PATH) == False:
+        os.makedirs(PSD_PATH)
     for i, channel in enumerate(channels):
         f_psd, psd = estimate_psd(channel, 1/pipe['dt'], nperseg=1e4/pipe['dt'], noverlap=None)
-        np.savez(f'{psd_path}psd_{channel_names[i]}.npz', f_psd=f_psd, psd=psd)
+        np.savez(PSD_PATH / f'psd_{channel_names[i]}.npz', f_psd=f_psd, psd=psd)
 
 if __name__ == "__main__":
     main()

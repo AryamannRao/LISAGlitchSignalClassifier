@@ -558,28 +558,28 @@ def sort_empty_dataset(h5):
     append_empty_sample(h5_hm, tdi_dict_hm)
     append_empty_sample(h5_ehm, tdi_dict_ehm)
 
-def create_imageset(dataset_path, resolution, keys):
+def create_imageset(dataset_path, time_steps, resolution, keys):
     image_key, tarr_key, farr_key = keys
     h5file = h5py.File(dataset_path, "a")
 
     h5file.create_dataset(
         image_key, 
-        shape=(0, resolution, resolution, 3),
-        maxshape=(None, resolution, resolution, 3),  # unlimited along axis 0
+        shape=(0, time_steps, resolution, resolution, 3),
+        maxshape=(None,time_steps, resolution, resolution, 3),  # unlimited along axis 0
         dtype="float32",
-        chunks=(1, resolution, resolution, 3),       # good practice
+        chunks=(1, time_steps, resolution, resolution, 3),       # good practice
         compression="gzip"
     )
     h5file.create_dataset(
-        tarr_key,   shape=(0, resolution), maxshape=(None, resolution), dtype="float32"
+        tarr_key,   shape=(0, time_steps, resolution), maxshape=(None,time_steps, resolution), dtype="float32"
     )
     h5file.create_dataset(
-        farr_key,   shape=(0, resolution), maxshape=(None, resolution), dtype="float32"
+        farr_key,   shape=(0, time_steps, resolution), maxshape=(None,time_steps, resolution), dtype="float32"
     )
     h5file.create_dataset(
     "tcen",
-    shape=(0,),
-    maxshape=(None,),
+    shape=(0, time_steps),
+    maxshape=(None, time_steps),
     dtype="float32")
 
     return h5file
@@ -588,11 +588,13 @@ def append_image(h5, image, t_arr, f_arr, tcen, keys):
     image_key, tarr_key, farr_key = keys
     n = h5[image_key].shape[0]  # current length
 
-    if image.ndim == 3:
+    if image.ndim == 4:
         image = np.expand_dims(image, axis=0)
-    t_arr = np.atleast_2d(t_arr)
-    f_arr = np.atleast_2d(f_arr)
-    tcen = np.atleast_1d(tcen)
+    if t_arr.ndim == 2:
+        t_arr = np.expand_dims(t_arr, axis=0)
+    if f_arr.ndim == 2:
+        f_arr = np.expand_dims(f_arr, axis=0)
+    tcen = np.atleast_2d(tcen)
     
     batch_size = image.shape[0]
     
@@ -601,10 +603,10 @@ def append_image(h5, image, t_arr, f_arr, tcen, keys):
     new_n = n + batch_size
 
     # resize datasets
-    h5[image_key].resize((new_n, image.shape[1], image.shape[2], image.shape[3]))
-    h5[tarr_key].resize((new_n, t_arr.shape[1]))
-    h5[farr_key].resize((new_n, f_arr.shape[1]))
-    h5["tcen"].resize((new_n,))
+    h5[image_key].resize((new_n, image.shape[1], image.shape[2], image.shape[3], image.shape[4]))
+    h5[tarr_key].resize((new_n, t_arr.shape[1], t_arr.shape[2]))
+    h5[farr_key].resize((new_n, f_arr.shape[1], f_arr.shape[2]))
+    h5["tcen"].resize((new_n, tcen.shape[1]))
 
     # store batch
     h5[image_key][n:new_n] = image.astype("float32")

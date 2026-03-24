@@ -32,27 +32,37 @@ elif MASS_CATEGORY == 'ext_high_mass':
     FILE_PATH = gw_ehm_dataset_path
 
 RESOLUTION = 256
+TIME_STEP = 5
 N_WORKERS, CHUNKSIZE = 6, 2
 REPRESENTATION = 'qscan'  # 'qscan' or 'varqscan'
 
 def run_one_sample(args):
-    tcen, X, Y, Z = args
+    tcen0, X, Y, Z = args
     tdi_dict = make_tdi_dict(X, Y, Z)
     
-    event = {'t_inj': PIPE['t_inj'] - tcen}
+    tcen_arr = np.linspace(-2, 2, TIME_STEP)*3600 + tcen0
+    
+    images = np.zeros((len(tcen_arr), RESOLUTION, RESOLUTION, 3))
+    t_axes = np.zeros((len(tcen_arr), RESOLUTION))
+    f_axes = np.zeros((len(tcen_arr), RESOLUTION))
+    tcen_vals = np.zeros(len(tcen_arr))
 
-    QT = np.zeros((RESOLUTION, RESOLUTION, 3))
-    for channel in ['A', 'E', 'T']:
-        if REPRESENTATION == 'varqscan':
-            t_arr, f_arr, data = varq_transform(tdi_dict, channel, PIPE, event, resolution=RESOLUTION,
-                                        frange=SPEC['frange'], trange=SPEC['trange'], Qvals=SPEC['Qvals'])
-        elif REPRESENTATION == 'qscan':
-            t_arr, f_arr, data = generate_qscan(tdi_dict, channel, PIPE, event, resolution=RESOLUTION,
-                             frange=SPEC['frange'], trange=SPEC['trange'], Q=SPEC['Q'])
+    for i, tcen in enumerate(tcen_arr):
+        event = {'t_inj': PIPE['t_inj'] - tcen}
+        QT = np.zeros((RESOLUTION, RESOLUTION, 3))
+        for channel in ['A', 'E', 'T']:
+            if REPRESENTATION == 'varqscan':
+                t_arr, f_arr, data = varq_transform(tdi_dict, channel, PIPE, event, resolution=RESOLUTION,
+                                            frange=SPEC['frange'], trange=SPEC['trange'], Qvals=SPEC['Qvals'])
+            elif REPRESENTATION == 'qscan':
+                t_arr, f_arr, data = generate_qscan(tdi_dict, channel, PIPE, event, resolution=RESOLUTION,
+                                frange=SPEC['frange'], trange=SPEC['trange'], Q=SPEC['Q'])
 
-        QT[:, :, ['A', 'E', 'T'].index(channel)] = data
+            QT[:, :, ['A', 'E', 'T'].index(channel)] = data
+        
+        images[i], t_axes[i], f_axes[i], tcen_vals[i] = QT, t_arr, f_arr, tcen
 
-    return QT, t_arr, f_arr, tcen
+    return images, t_axes, f_axes, tcen_vals
 
 def run_chunk(job_chunk):
     results = []
@@ -79,7 +89,7 @@ def main():
     h5file = h5py.File(FILE_PATH, "r+")
     if keys[0] not in h5file:
         h5file.close()
-        h5file = create_imageset(FILE_PATH, RESOLUTION, keys=keys)
+        h5file = create_imageset(FILE_PATH, TIME_STEP, RESOLUTION, keys=keys)
         X_array = h5file["X"][:]
         Y_array = h5file["Y"][:]
         Z_array = h5file["Z"][:]
@@ -100,10 +110,10 @@ def main():
         Y_array = h5file["Y"][n:]
         Z_array = h5file["Z"][n:]
 
-    tcen_array = np.random.uniform(-2, 2, size=len(X_array))*3600
+    tcen_start = np.random.uniform(-1, 1, size=len(X_array))*3600
 
     # Prepare job list
-    jobs = [(tcen_array[i], X_array[i], Y_array[i], Z_array[i])
+    jobs = [(tcen_start[i], X_array[i], Y_array[i], Z_array[i])
              for i in range(len(X_array))]
 
     print(f"Running with {N_WORKERS} workers")
@@ -123,8 +133,8 @@ def main():
             completed_samples += len(results)
             tqdm.write(f"Samples done: {completed_samples}/{total_samples}")
             
-            for QT, t_arr, f_arr, tcen in results:
-                append_image(h5file, QT, t_arr, f_arr, tcen, keys=keys)
+            for images, t_axes, f_axes, tcen_vals in results:
+                append_image(h5file, images, t_axes, f_axes, tcen_vals, keys=keys)
     
     h5file.close()
 

@@ -13,12 +13,12 @@ if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
 import torch
-from torch.utils.data import random_split, DataLoader
+from torch.utils.data import random_split, DataLoader, Subset
 
 from model import CNN, LISADataset
 from helpers.config import *
 
-MASS_CATEGORY = 'low_mass'  # 'low_mass', 'high_mass', 'ext_high_mass'
+MASS_CATEGORY = 'ext_high_mass'  # 'low_mass', 'high_mass', 'ext_high_mass'
 
 if MASS_CATEGORY == 'low_mass':
     DATASET_PATH = training_lm_dataset_path
@@ -29,60 +29,68 @@ elif MASS_CATEGORY == 'ext_high_mass':
 
 SAVE_DIR = TRAINING_RESULTS / MASS_CATEGORY /f'run_{datetime.now().strftime("%d%m%y_%H%M%S")}'
 
-WIDTH = 8
+WIDTH = 6
 USE_BATCH_NORM = True
 NORMALISE = False
 BATCH_SIZE = 64
 LEARNING_RATE = 0.001
-NUM_EPOCHS = 8
+NUM_EPOCHS = 9
 DROP = 0.0
 
-PLOT_EVERY = 2
+PLOT_EVERY = 50
 PRINT_EVERY = 15
 
 DEVICE = torch.device('mps')
 
-def soft_accuracy(model, dataset, threshold=0.5):
+def accuracy(model, loader, threshold=0.5):
     model.eval()
-    loader = DataLoader(dataset, batch_size=BATCH_SIZE)
+    
+    soft_correct, hard_correct, soft_total, hard_total = 0, 0, 0, 0
+    with torch.no_grad():
+        for images, labels in loader:
+            images, labels = images.to(DEVICE), labels.to(DEVICE)
+            
+            outputs = model(images)
+            predicted = (torch.sigmoid(outputs) > threshold).float()
+            soft_correct += (predicted == labels).sum().item()
+            hard_correct += ((predicted == labels).all(dim=1)).sum().item()
+            soft_total += labels.numel()
+            hard_total += labels.size(0)
+    
+    soft_acc = soft_correct/soft_total
+    hard_acc = hard_correct/hard_total
+    return soft_acc, hard_acc
 
-    correct, total = 0, 0
+def compute_loss(model, loader, criterion):
+    model.eval()
+    loss = 0.0
+    count = 0
     with torch.no_grad():
         for images, labels in loader:
             images, labels = images.to(DEVICE), labels.to(DEVICE)
             outputs = model(images)
-            predicted = (torch.sigmoid(outputs) > threshold).float()
-            correct += (predicted == labels).sum().item()
-            total += labels.numel()
-    
-    return correct / total
+            loss += float(criterion(outputs, labels))
+            count += 1
+    loss /= count
+    return loss
 
-def hard_accuracy(model, dataset, threshold=0.5):
-    model.eval()
-    loader = DataLoader(dataset, batch_size=BATCH_SIZE)
-
-    correct, total = 0, 0
-    with torch.no_grad():
-        for images, labels in loader:
-            images, labels = images.to(DEVICE), labels.to(DEVICE)
-            outputs = model(images)
-            predicted = (torch.sigmoid(outputs) > threshold).float()
-            correct += ((predicted == labels).all(dim=1)).sum().item()
-            total += labels.size(0)
-    
-    return correct / total
-
-def train_model(model, train_data, val_data, test_dataset,
+def train_model(model, train_data, val_data, test_data,
                 learning_rate=0.005, batch_size=10,
                 num_epochs=10, plot_every=10, print_every=10):
     model = model.to(DEVICE)
-
     train_loader = DataLoader(train_data, batch_size=batch_size, shuffle=True)
-    criterion = torch.nn.BCEWithLogitsLoss()
+    
+    subset_size = 500
+    rng = np.random.default_rng(42)
+    indices = rng.choice(len(val_data), subset_size, replace=False)
 
+    val_subset = Subset(val_data, indices)
+    val_loader = DataLoader(val_subset, batch_size=batch_size)
+    
+    criterion = torch.nn.BCEWithLogitsLoss()
     optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate, weight_decay=1e-4)
 
-    iters, train_loss, train_soft_acc, val_soft_acc, train_hard_acc, val_hard_acc = [], [], [], [], [], []
+    iters, train_loss, valid_loss = [], [], []
     iter_count = 0
     best_loss = np.inf
 
@@ -103,72 +111,48 @@ def train_model(model, train_data, val_data, test_dataset,
                 torch.save(model.state_dict(), SAVE_DIR / 'best_model_weights.pth')
                 print(f'Best model weights saved at iteration {iter_count} and loss = {float(loss):.3f}')
 
-            iter_count += 1
             if iter_count % plot_every == 0:
                 iters.append(iter_count)
                 train_loss.append(float(loss))
-                train_soft_acc.append(soft_accuracy(model, train_data))
-                val_soft_acc.append(soft_accuracy(model, val_data))
-                train_hard_acc.append(hard_accuracy(model, train_data))
-                val_hard_acc.append(hard_accuracy(model, val_data))
+                valid_loss.append(compute_loss(model, val_loader, criterion))
                 model.train()
-                
-            if iter_count % print_every == 0:
                 end = time.time()
                 print(f"Epoch {e+1}/{num_epochs}, Iteration {iter_count}, Loss: {loss:.3f}, " +\
-                        f" Train Soft Acc: {train_soft_acc[-1]:.3f}, Val Soft Acc: {val_soft_acc[-1]:.3f}, " +\
-                        f"Train Hard Acc: {train_hard_acc[-1]:.3f}, Val Hard Acc: {val_hard_acc[-1]:.3f}," +\
+                        f"Val loss: {valid_loss[-1]:.3f}, " +\
                         f"Time passed: {(end - start):.3f} secs.")
+            iter_count += 1
     
     iters.append(iter_count)
     train_loss.append(float(loss))
-    train_soft_acc.append(soft_accuracy(model, train_data))
-    val_soft_acc.append(soft_accuracy(model, val_data))
-    train_hard_acc.append(hard_accuracy(model, train_data))
-    val_hard_acc.append(hard_accuracy(model, val_data))
 
-    test_soft_acc = soft_accuracy(model, test_dataset)
-    test_hard_acc = hard_accuracy(model, test_dataset)
-    return iters, train_loss, train_soft_acc, val_soft_acc,\
-          train_hard_acc, val_hard_acc, test_soft_acc, test_hard_acc
+    print('Computing accuracies:')
+    val_loader = DataLoader(val_data, batch_size=batch_size)
+    val_soft_acc, val_hard_acc = accuracy(model, val_loader)
+
+    test_loader = DataLoader(test_data, batch_size=batch_size)
+    test_soft_acc, test_hard_acc = accuracy(model, test_loader)
+
+    return iters, train_loss, valid_loss,\
+         val_soft_acc, val_hard_acc, test_soft_acc, test_hard_acc
 
 def plot_results(results):
-    iters, train_loss, train_soft_acc, val_soft_acc,\
-          train_hard_acc, val_hard_acc, test_soft_acc, test_hard_acc = results
-    
-    final_train_soft_acc = train_soft_acc[-1]
-    final_val_soft_acc = val_soft_acc[-1]
-    final_train_hard_acc = train_hard_acc[-1]
-    final_val_hard_acc = val_hard_acc[-1]
+    iters, train_loss, valid_loss,\
+         val_soft_acc, val_hard_acc, test_soft_acc, test_hard_acc = results
 
-    fig, axes = plt.subplots(3, 1, figsize=(12, 15), constrained_layout=True)
+    fig, axes = plt.subplots(1, 1, figsize=(10, 8), constrained_layout=True)
     title = f"Model used: CNN (width={WIDTH}, batch norm={USE_BATCH_NORM}, norm={NORMALISE}, drop={DROP})\n" +\
     f"Training curve (batch size={BATCH_SIZE}, learning rate={LEARNING_RATE}, num epochs={NUM_EPOCHS})\n" +\
-    f"Final Train Soft Acc: {final_train_soft_acc:.3f}, Final Val Soft Acc: {final_val_soft_acc:.3f},\n" +\
-    f" Final Train Hard Acc: {final_train_hard_acc:.3f}, Final Val Hard Acc: {final_val_hard_acc:.3f}, \n" +\
+    f"Final Valid Soft Acc: {val_soft_acc:.3f}, Final Valid Hard Acc: {val_hard_acc:.3f},\n" +\
     f"Test Soft Acc: {test_soft_acc:.3f}, Test Hard Acc: {test_hard_acc:.3f}, \n" +\
-    f"Final loss {train_loss[-1]:.3f}"
+    f"Final Train loss {train_loss[-1]:.3f}, Final Val loss {valid_loss[-1]:.3f}"
     fig.suptitle(title, fontsize=12)
 
-    axes[0].plot(iters[:len(train_loss)], train_loss)
-    axes[0].set_title("Loss over iterations")
-    axes[0].set_xlabel("Iterations")
-    axes[0].set_ylabel("Loss")
-
-    axes[1].plot(iters[:len(train_soft_acc)], train_soft_acc)
-    axes[1].plot(iters[:len(val_soft_acc)], val_soft_acc)
-    axes[1].set_title("Soft Accuracy over iterations")
-    axes[1].set_xlabel("Iterations")
-    axes[1].set_ylabel("Accuracy")
-    axes[1].legend(["Train", "Validation"])
-
-    axes[2].plot(iters[:len(train_hard_acc)], train_hard_acc)
-    axes[2].plot(iters[:len(val_hard_acc)], val_hard_acc)
-    axes[2].set_title("Hard Accuracy over iterations")
-    axes[2].set_xlabel("Iterations")
-    axes[2].set_ylabel("Accuracy")
-    axes[2].legend(["Train", "Validation"])
-    
+    axes.plot(iters[:len(train_loss)], train_loss, label='Train loss')
+    axes.plot(iters[:len(valid_loss)], valid_loss, label='Validation loss')
+    axes.set_title("Loss over iterations")
+    axes.set_xlabel("Iterations")
+    axes.set_ylabel("Loss")
+    axes.legend()
     plt.savefig(SAVE_DIR / 'training_curves.png')
 
 def main():
