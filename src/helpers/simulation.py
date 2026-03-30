@@ -8,7 +8,7 @@ SRC_ROOT = Path(__file__).resolve().parent.parent
 if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
-from helpers.gw_shapes import ReducedOneSidedDoubleExpGW, BinaryInspiralGW
+from helpers.gw_shapes import BinaryInspiralGW
 from scipy.signal.windows import tukey
 from pytdi.michelson import X2, Y2, Z2
 from gwpy.timeseries import TimeSeries, TimeSeriesDict
@@ -16,7 +16,7 @@ from lisainstrument import Instrument
 from pytdi import Data
 from helpers.config import *
 
-from lisaglitch import RectangleGlitch, ShapeletGlitch, OneSidedDoubleExpGlitch, TwoSidedDoubleExpGlitch
+from lisaglitch import RectangleGlitch, ShapeletGlitch, IntegratedShapeletGlitch
 
 def create_gws(gws, pipe, gw_path, orbits_path):
     if os.path.exists(gw_path):
@@ -28,11 +28,6 @@ def create_gws(gws, pipe, gw_path, orbits_path):
                         gw_beta=gw['gw_beta'], gw_lambda=gw['gw_lambda'], orbits=orbits_path, domain=gw['domain'])
 
             gw.write(path=gw_path, mode="a", dt=pipe['dt'], size=pipe['size'], t0=pipe['t0'])
-        elif gw['type'] == 'ReducedOneSidedDoubleExpGW':
-            gw = ReducedOneSidedDoubleExpGW(t_inj=gw['t_inj'] + pipe['t0'], t_fall=gw['t_fall'],
-                    amp=gw['amp'], gw_beta=gw['gw_beta'], gw_lambda=gw['gw_lambda'], orbits=orbits_path)
-
-            gw.write(path=gw_path, mode="a", t0=pipe['t0'], size=pipe['size'], dt=pipe['dt'])
 
 def create_glitches(glitches, pipe, glitch_path):
     if os.path.exists(glitch_path):
@@ -43,20 +38,28 @@ def create_glitches(glitches, pipe, glitch_path):
                                     inj_point=glitch['inj_point'], t_inj=glitch['t_inj'] + pipe['t0'])
 
             glitch.write(path=glitch_path, mode="a", t0=pipe['t0'], size=pipe['size'], dt=pipe['dt'])
+        elif glitch['type'] == 'IntegratedShapeletGlitch':
+            glitch = IntegratedShapeletGlitch(level=glitch['level'], beta=glitch['beta'], 
+                                    inj_point=glitch['inj_point'], t_inj=glitch['t_inj'] + pipe['t0'])
+
+            glitch.write(path=glitch_path, mode="a", t0=pipe['t0'], size=pipe['size'], dt=pipe['dt'])
 
 def run_simulation(gws, glitches, pipe, 
                    gw_path, glitch_path, orbits_path, 
-                   simulation_path, disable_noise=False):
-    create_gws(gws, pipe, gw_path, orbits_path)
-    create_glitches(glitches, pipe, glitch_path)
+                   simulation_path, disable_noise=False, seed=None):
+    if gw_path is not None:
+        create_gws(gws, pipe, gw_path, orbits_path)
+    if glitch_path is not None:
+        create_glitches(glitches, pipe, glitch_path)
 
     lisa_instrument = Instrument(size=pipe['size'], dt=pipe['dt'], t0=pipe['t0'],
         orbits=orbits_path, physics_upsampling=1, aafilter=None,
-        glitches=glitch_path, gws=gw_path)
+        glitches=glitch_path, gws=gw_path, seed=seed)
 
-    lisa_instrument.disable_dopplers()
-    if disable_noise:
+    if disable_noise is True:
         lisa_instrument.disable_all_noises()
+    elif disable_noise is not False:
+        lisa_instrument.disable_all_noises(disable_noise)
 
     if os.path.exists(simulation_path):
         os.remove(simulation_path)
@@ -69,17 +72,13 @@ def run_tdi(simulation_path, pipe):
     tdi_dict = TimeSeriesDict()
 
     data = Data.from_instrument(simulation_path)
-    data.delay_derivative = None
+    #data.delay_derivative = None
 
     for i in range(len(channels)):
         channel = channels[i]
     
         # CALCULATE TDI CHANNEL DATA
         tdi_data = channel.build(**data.args)(data.measurements)
-    
-        # WINDOW TDI CHANNEL DATA
-        #window = tukey(tdi_data.size, alpha=0.05)
-        #signal = tdi_data * window
         tdi_dict[tdi_names[i]] = TimeSeries(tdi_data, t0=pipe['t0'], dt=pipe['dt'])
     
     return tdi_dict

@@ -8,6 +8,7 @@ import contextlib
 import numpy as np
 import time
 from pathlib import Path
+from scipy.stats import truncnorm
 
 # Ensure src is on Python path regardless of where code is run from
 SRC_ROOT = Path(__file__).resolve().parent.parent
@@ -34,11 +35,14 @@ def suppress_output():
             sys.stdout = old_stdout
             sys.stderr = old_stderr
 
-NSAMPLES = 1000
+NSAMPLES = 2000
 LOG_MASS_MIN, LOG_MASS_MAX = 4, 7
+Q_MIN, Q_MAX = 1, 5
+LOG_D_MIN, LOG_D_MAX = 3, 5
+SPIN_MIN, SPIN_MAX = 0, 0.99
 
-#LEVEL_MIN, LEVEL_MAX = 1e-6, 1e-5
-BETA_MIN, BETA_MAX = 500, 3600
+BETA_MIN = 1
+AMP_MIN, AMP_MAX = 1e-16, 1e-10
 INJ_POINTS = ['tm_12', 'tm_23', 'tm_13',
               'tm_21', 'tm_32', 'tm_31']
 
@@ -47,7 +51,7 @@ SEP_MIN, SEP_MAX = -1.5, 1.5
 N_WORKERS, CHUNKSIZE = 6, 2
 
 def run_one_sample(args):
-    m1, m2, d, spin1, spin2, gw_beta, gw_lambda, level, beta, inj_point, sep, pipe = args
+    m1, m2, d, spin1, spin2, gw_beta, gw_lambda, amp, beta, inj_point, sep, pipe = args
 
     gws = [{'type': 'BinaryInspiralGW',
         'm1': m1, 'm2': m2, 'd': d,
@@ -55,8 +59,8 @@ def run_one_sample(args):
         'gw_beta': gw_beta, 'gw_lambda': gw_lambda,
         't_inj': pipe['t_inj'] + sep * 3600, 'domain': 'freq'}]
 
-    glitches = [{'type':'ShapeletGlitch', 't_inj': pipe['t_inj'] - sep * 3600, 'beta':beta,
-             'level':level, 'inj_point':inj_point}]
+    glitches = [{'type':'IntegratedShapeletGlitch', 't_inj': pipe['t_inj'] - sep * 3600, 'beta':beta,
+             'level':2*amp*beta, 'inj_point':inj_point}]
 
     pid = os.getpid()
     local_sim_path = f"{simulation_path}_{pid}.h5"
@@ -68,16 +72,15 @@ def run_one_sample(args):
             gws, glitches, pipe,
             local_gw_path, local_glitch_path, orbits_path,
             local_sim_path,
-            disable_noise=False
+            disable_noise=PIPE['keep_noises']
         )
-
-    tdi_dict = run_tdi(local_sim_path, pipe)
+        tdi_dict = run_tdi(local_sim_path, pipe)
 
     os.remove(local_sim_path)
     os.remove(local_gw_path)
     os.remove(local_glitch_path)
 
-    return tdi_dict, m1, m2, d, spin1, spin2, gw_beta, gw_lambda, level, beta, inj_point, sep
+    return tdi_dict, m1, m2, d, spin1, spin2, gw_beta, gw_lambda, amp, beta, inj_point, sep
 
 def run_chunk(job_chunk):
     results = []
@@ -93,46 +96,68 @@ def chunkify(lst, chunksize):
     for i in range(0, len(lst), chunksize):
         yield lst[i:i + chunksize]
 
+def truncated_2d_gaussian(mu, cov, xmin, size):
+    mu_x, mu_y = mu
+    
+    # Step 1: sample x (vectorized)
+    sigma_x = np.sqrt(cov[0, 0])
+    a = (xmin - mu_x) / sigma_x
+    
+    x = truncnorm.rvs(a, np.inf, loc=mu_x, scale=sigma_x, size=size)
+    
+    # Step 2: compute conditional mean (vectorized)
+    beta = cov[1, 0] / cov[0, 0]
+    mu_cond = mu_y + beta * (x - mu_x)
+    
+    # Step 3: conditional variance (scalar)
+    var_cond = cov[1, 1] - (cov[1, 0]**2) / cov[0, 0]
+    sigma_cond = np.sqrt(var_cond)
+    
+    # Step 4: sample y (vectorized)
+    y = np.random.normal(mu_cond, sigma_cond, size=size)
+    
+    return np.column_stack((x, y))
+
 def get_param_values(nsamples):
     m1_array = 10**np.random.uniform(LOG_MASS_MIN, LOG_MASS_MAX, size=nsamples)
-    m2_array = m1_array * np.random.uniform(1, 5, size=nsamples)
-    chirp_array = chirp_mass(m1_array, m2_array)
-
-    spin1_array = np.random.uniform(0, 0.9, size=nsamples)
+    m2_array = m1_array * np.random.uniform(Q_MIN, Q_MAX, size=nsamples)
+    spin1_array = np.random.uniform(SPIN_MIN, SPIN_MAX, size=nsamples)
     spin2_array = spin1_array * np.random.choice([-1, 1], size=nsamples)
-
-    low = chirp_array < 1e5
-    med = (chirp_array >= 1e5) & (chirp_array <= 1e6)
-    high = chirp_array > 1e6
-
-    level_array = np.empty_like(m1_array, dtype=float)
-    level_array[low] = 10**np.random.uniform(-6, -5, size=np.sum(low))
-    level_array[med] = 10**np.random.uniform(-6, -5, size=np.sum(med))
-    level_array[high] = 10**np.random.uniform(np.log10(5e-7), np.log10(5e-6), size=np.sum(high))
-
-    d_array = 10**np.random.uniform(2.5, 4, size=nsamples)
+    d_array = 10**np.random.uniform(LOG_D_MIN, LOG_D_MAX, size=nsamples)
     gw_beta_array = np.random.uniform(-np.pi/2, np.pi/2, size=nsamples)
     gw_lambda_array = np.random.uniform(0, 2*np.pi, size=nsamples)
 
-    beta_array = np.random.uniform(BETA_MIN, BETA_MAX, nsamples)
+    params = np.loadtxt(lpf_ord_param_path, skiprows=1)
+    lpf_betas, lpf_levels = params[:, 0], np.abs(params[:, 1])
+    lpf_levels = lpf_levels[lpf_betas > BETA_MIN]
+    lpf_betas = lpf_betas[lpf_betas > BETA_MIN]
+    lpf_betas = lpf_betas[(lpf_levels > AMP_MIN) & (lpf_levels < AMP_MAX)]
+    lpf_levels = lpf_levels[(lpf_levels > AMP_MIN) & (lpf_levels < AMP_MAX)]
+    params = np.vstack((np.log10(lpf_betas), np.log10(lpf_levels))).T
+    mu = np.mean(params, axis=0)
+    cov = np.cov(params, rowvar=False)
+    samples = truncated_2d_gaussian(mu, cov, xmin=np.log10(BETA_MIN), size=nsamples)
+    
+    beta_array = 10**samples[:,0]
+    amp_array  = 10**samples[:,1]
     inj_point_array = np.random.choice(INJ_POINTS, nsamples)
+
     sep_array = np.random.uniform(SEP_MIN, SEP_MAX, nsamples)
 
     return m1_array, m2_array, d_array,\
           spin1_array, spin2_array, gw_beta_array, gw_lambda_array,\
-            level_array, beta_array, inj_point_array, sep_array
+            amp_array, beta_array, inj_point_array, sep_array
 
 def main():
     start = time.time()
 
     m1_array, m2_array, d_array, spin1_array, spin2_array, gw_beta_array, gw_lambda_array,\
-         level_array, beta_array, inj_point_array, sep_array = get_param_values(NSAMPLES)
+         amp_array, beta_array, inj_point_array, sep_array = get_param_values(NSAMPLES)
 
-    # Prepare job list
     jobs = [(m1_array[i], m2_array[i], d_array[i], 
              spin1_array[i], spin2_array[i], 
              gw_beta_array[i], gw_lambda_array[i],
-             level_array[i], beta_array[i], inj_point_array[i],
+             amp_array[i], beta_array[i], inj_point_array[i],
              sep_array[i], PIPE) for i in range(NSAMPLES)]
 
     if os.path.exists(mixed_dataset_path):
@@ -157,9 +182,9 @@ def main():
             completed_samples += len(results)
             tqdm.write(f"Samples done: {completed_samples}/{total_samples}")
             
-            for tdi_dict, m1, m2, d, spin1, spin2, gw_beta, gw_lambda, level, beta, inj_point, sep in results:
+            for tdi_dict, m1, m2, d, spin1, spin2, gw_beta, gw_lambda, amp, beta, inj_point, sep in results:
                 append_mixed_sample(h5file, tdi_dict, m1, m2, d, spin1, spin2, gw_beta, gw_lambda,
-                                    level, beta, inj_point, sep)
+                                    amp, beta, inj_point, sep)
 
     sort_mixed_dataset(h5file)
     h5file.close()

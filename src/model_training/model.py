@@ -5,11 +5,13 @@ import h5py
 import numpy as np
 
 class CNN(nn.Module):
-    def __init__(self, width=4, bn=True):
+    def __init__(self, width=4, bn=True, normalise=False, drop=0.0):
         
         super(CNN, self).__init__()
         self.width = width
         self.bn = bn
+        self.norm = normalise
+        self.drop = drop
         self.conv1 = nn.Conv2d(in_channels=3,
                                out_channels=self.width,
                                kernel_size=3,
@@ -34,10 +36,13 @@ class CNN(nn.Module):
             self.bn4 = nn.BatchNorm2d(self.width*8)
         
         self.pool = nn.MaxPool2d(2, 2)
-       
+        self.dropout = nn.Dropout(self.drop)
         self.fc1 = nn.Linear(self.width * 8 * 16 * 16, 100)
         self.fc2 = nn.Linear(100, 2)
+
     def forward(self, x):
+        if self.norm:
+            x = x/x.amax(dim=(1, 2, 3), keepdim=True)
         x = self.pool(torch.relu(self.conv1(x)))
         if self.bn:
             x = self.bn1(x)
@@ -52,6 +57,7 @@ class CNN(nn.Module):
             x = self.bn4(x)
         x = x.view(-1, self.width * 8 * 16 * 16)
         x = torch.relu(self.fc1(x))
+        x = self.dropout(x)
         return self.fc2(x)
     
 class LISADataset(Dataset):

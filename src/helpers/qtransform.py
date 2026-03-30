@@ -54,7 +54,6 @@ def q_transform(times, signal, Q, frange, trange, resolution):
     QT *= np.log(2)
     
     f_new = np.logspace(np.log10(np.min(f_arr)), np.log10(np.max(f_arr)), resolution, endpoint=True)
-    #f_new = np.linspace(np.min(f_arr), np.max(f_arr), resolution, endpoint=True)
     t_new = np.linspace(np.min(t_arr[-1]), np.max(t_arr[-1]), resolution, endpoint=True)
     
     cubicspline = RectBivariateSpline(f_arr, t_arr[-1], QT, kx=3, ky=3)

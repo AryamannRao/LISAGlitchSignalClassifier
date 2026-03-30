@@ -34,8 +34,12 @@ def suppress_output():
             sys.stdout = old_stdout
             sys.stderr = old_stderr
 
-NSAMPLES = 1000
+NSAMPLES = 2000
 LOG_MASS_MIN, LOG_MASS_MAX = 4, 7
+Q_MIN, Q_MAX = 1, 5
+LOG_D_MIN, LOG_D_MAX = 3, 5
+SPIN_MIN, SPIN_MAX = 0, 0.99
+
 N_WORKERS, CHUNKSIZE = 6, 2
 
 def run_one_sample(args):
@@ -47,29 +51,24 @@ def run_one_sample(args):
         'gw_beta': gw_beta, 'gw_lambda': gw_lambda,
         't_inj': pipe['t_inj'], 'domain': 'freq'}]
 
-    glitches = [{'type':'OneSidedDoubleExpGlitch', 't_inj': 0,
-             'level':0, 't_rise':1, 't_fall':1, 
-             'inj_point':'readout_tmi_carrier_12'}]
-
+    glitches = []
 
     pid = os.getpid()
     local_sim_path = f"{simulation_path}_{pid}.h5"
-    local_gw_path     = f"{gw_path}_{pid}.h5"
-    local_glitch_path = f"{glitch_path}_{pid}.h5"
+    local_gw_path = f"{gw_path}_{pid}.h5"
+    local_glitch_path = None
 
     with suppress_output():
         run_simulation(
             gws, glitches, pipe,
             local_gw_path, local_glitch_path, orbits_path,
             local_sim_path,
-            disable_noise=False
+            disable_noise=PIPE['keep_noises']
         )
-
-    tdi_dict = run_tdi(local_sim_path, pipe)
+        tdi_dict = run_tdi(local_sim_path, pipe)
 
     os.remove(local_sim_path)
     os.remove(local_gw_path)
-    os.remove(local_glitch_path)
 
     return tdi_dict, m1, m2, d, spin1, spin2, gw_beta, gw_lambda
 
@@ -89,21 +88,12 @@ def chunkify(lst, chunksize):
 
 def get_param_values(nsamples):
     m1_array = 10**np.random.uniform(LOG_MASS_MIN, LOG_MASS_MAX, size=nsamples)
-    m2_array = m1_array * np.random.uniform(1, 5, size=nsamples)
-    chirp_array = chirp_mass(m1_array, m2_array)
+    m2_array = m1_array * np.random.uniform(Q_MIN, Q_MAX, size=nsamples)
 
-    spin1_array = np.random.uniform(0, 0.9, size=nsamples)
+    spin1_array = np.random.uniform(SPIN_MIN, SPIN_MAX, size=nsamples)
     spin2_array = spin1_array * np.random.choice([-1, 1], size=nsamples)
 
-    #low = chirp_array < 1e5
-    #med = (chirp_array >= 1e5) & (chirp_array <= 1e6)
-    #high = chirp_array > 1e6
-
-    #d_array = np.empty_like(m1_array, dtype=float)
-    #d_array[low] = 10**np.random.uniform(3, 4, size=np.sum(low))
-    #d_array[med] = 10**np.random.uniform(3, 4, size=np.sum(med))
-    #d_array[high] = 10**np.random.uniform(3, 4, size=np.sum(high))
-    d_array = 10**np.random.uniform(2.5, 4, size=nsamples)
+    d_array = 10**np.random.uniform(LOG_D_MIN, LOG_D_MAX, size=nsamples)
     gw_beta_array = np.random.uniform(-np.pi/2, np.pi/2, size=nsamples)
     gw_lambda_array = np.random.uniform(0, 2*np.pi, size=nsamples)
 
@@ -112,9 +102,9 @@ def get_param_values(nsamples):
 def main():
     start = time.time()
 
-    m1_array, m2_array, d_array, spin1_array, spin2_array, gw_beta_array, gw_lambda_array = get_param_values(NSAMPLES)
+    m1_array, m2_array, d_array, spin1_array, spin2_array,\
+        gw_beta_array, gw_lambda_array = get_param_values(NSAMPLES)
 
-    # Prepare job list
     jobs = [(m1_array[i], m2_array[i], d_array[i], 
              spin1_array[i], spin2_array[i], 
              gw_beta_array[i], gw_lambda_array[i], PIPE) for i in range(NSAMPLES)]

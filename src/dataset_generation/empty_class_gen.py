@@ -34,38 +34,27 @@ def suppress_output():
             sys.stdout = old_stdout
             sys.stderr = old_stderr
 
-NSAMPLES = 1000
+NSAMPLES = 666
 N_WORKERS, CHUNKSIZE = 6, 2
 
 def run_one_sample(args):
     pipe = args
-
-    gws = [{'type':'ReducedOneSidedDoubleExpGW', 't_inj': 0, 'amp':0, 't_rise':1, 't_fall':1,
-             'gw_beta':0, 'gw_lambda':0}]
-
-    glitches = [{'type':'OneSidedDoubleExpGlitch', 't_inj': 0,
-             'level':0, 't_rise':1, 't_fall':1, 
-             'inj_point':'readout_tmi_carrier_12'}]
-
+    gws, glitches = [], []
 
     pid = os.getpid()
     local_sim_path = f"{simulation_path}_{pid}.h5"
-    local_gw_path     = f"{gw_path}_{pid}.h5"
-    local_glitch_path = f"{glitch_path}_{pid}.h5"
+    local_gw_path = None
+    local_glitch_path = None
 
     with suppress_output():
         run_simulation(
             gws, glitches, pipe,
             local_gw_path, local_glitch_path, orbits_path,
             local_sim_path,
-            disable_noise=False
+            disable_noise=PIPE['keep_noises']
         )
-
-    tdi_dict = run_tdi(local_sim_path, pipe)
-
+        tdi_dict = run_tdi(local_sim_path, pipe)
     os.remove(local_sim_path)
-    os.remove(local_gw_path)
-    os.remove(local_glitch_path)
 
     return tdi_dict
 
@@ -88,9 +77,8 @@ def main():
 
     jobs = [PIPE for i in range(NSAMPLES)]
     
-    # Create dataset
-    #if os.path.exists(empty_dataset_path):
-     #   os.remove(empty_dataset_path)
+    if os.path.exists(empty_dataset_path):
+        os.remove(empty_dataset_path)
 
     h5file = create_empty_dataset(empty_dataset_path, PIPE['size'])
 
@@ -114,6 +102,7 @@ def main():
             for tdi_dict in results:
                 append_empty_sample(h5file, tdi_dict)
     
+    #sort_empty_dataset(h5file)
     h5file.close()
 
     end = time.time()
