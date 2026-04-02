@@ -67,6 +67,8 @@ class LISADataset(Dataset):
         
         self.images = self.file["images"]
         self.labels = self.file["labels"]
+        self.sim_indices = self.file["sim_index"]
+        self.time_indices = self.file["time_index"]
         
     def __len__(self):
         return len(self.images)
@@ -75,6 +77,8 @@ class LISADataset(Dataset):
         
         image = self.images[idx]
         label = self.labels[idx]
+        sim_idx = self.sim_indices[idx]
+        time_idx = self.time_indices[idx]
         
         # convert to float32
         image = image.astype(np.float32)
@@ -87,4 +91,4 @@ class LISADataset(Dataset):
         image = torch.from_numpy(image)
         label = torch.from_numpy(label)
         
-        return image, label
+        return image, label, sim_idx, time_idx

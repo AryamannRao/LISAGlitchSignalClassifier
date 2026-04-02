@@ -54,8 +54,8 @@ def accuracy(model, loader, threshold=0.5):
     
     soft_correct, hard_correct, soft_total, hard_total = 0, 0, 0, 0
     with torch.no_grad():
-        for images, labels in loader:
-            images, labels = images.to(DEVICE), labels.to(DEVICE)
+        for batch in loader:
+            images, labels = batch[0].to(DEVICE), batch[1].to(DEVICE)
             
             outputs = model(images)
             predicted = (torch.sigmoid(outputs) > threshold).float()
@@ -73,8 +73,8 @@ def compute_loss(model, loader, criterion):
     loss = 0.0
     count = 0
     with torch.no_grad():
-        for images, labels in loader:
-            images, labels = images.to(DEVICE), labels.to(DEVICE)
+        for batch in loader:
+            images, labels = batch[0].to(DEVICE), batch[1].to(DEVICE)
             outputs = model(images)
             loss += float(criterion(outputs, labels))
             count += 1
@@ -103,8 +103,8 @@ def train_model(model, train_data, val_data, test_data,
 
     start = time.time()
     for e in range(num_epochs):
-        for images, labels in train_loader:
-            images, labels = images.to(DEVICE), labels.to(DEVICE)
+        for batch in train_loader:
+            images, labels = batch[0].to(DEVICE), batch[1].to(DEVICE)
 
             z = model(images)
             loss = criterion(z, labels)
