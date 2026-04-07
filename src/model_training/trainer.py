@@ -18,7 +18,7 @@ from torch.utils.data import random_split, DataLoader, Subset
 from model import CNN, LISADataset
 from helpers.config import *
 
-MASS_CATEGORY = 'low_mass'  # 'low_mass', 'high_mass', 'ext_high_mass'
+MASS_CATEGORY = 'high_mass'  # 'low_mass', 'high_mass', 'ext_high_mass'
 
 if MASS_CATEGORY == 'low_mass':
     DATASET_PATH = training_lm_dataset_path
@@ -32,7 +32,7 @@ SAVE_DIR = TRAINING_RESULTS / MASS_CATEGORY /f'run_{datetime.now().strftime("%d%
 MODEL_PARAMS = {'ext_high_mass':{'width': 6, 'bn': True, 'normalise': False,
                                 'drop': 0.0, 'num_epochs': 9, 'learning_rate': 0.001, 'batch_size': 64},
                 'high_mass':{'width': 8, 'bn': True, 'normalise': False,
-                            'drop': 0.0, 'num_epochs': 9, 'learning_rate': 0.001, 'batch_size': 64},
+                            'drop': 0.0, 'num_epochs': 6, 'learning_rate': 0.001, 'batch_size': 64},
                 'low_mass':{'width': 8, 'bn': True, 'normalise': False,
                             'drop': 0.0, 'num_epochs': 9, 'learning_rate': 0.001, 'batch_size': 64}}[MASS_CATEGORY]
 
@@ -113,16 +113,17 @@ def train_model(model, train_data, val_data, test_data,
             optimizer.step()
             optimizer.zero_grad()
 
-            if float(loss) < best_loss:
-                best_loss = float(loss)
-                torch.save(model.state_dict(), SAVE_DIR / 'best_model_weights.pth')
-                print(f'Best model weights saved at iteration {iter_count} and loss = {float(loss):.3f}')
+            if float(loss.detach()) < best_loss:
+                    best_loss = float(loss.detach())
+                    torch.save(model.state_dict(), SAVE_DIR / 'best_model_weights.pth')
+                    print(f'Best model weights saved at iteration {iter_count} and loss = {float(loss.detach()):.3f}')
 
             if iter_count % plot_every == 0:
                 iters.append(iter_count)
-                train_loss.append(float(loss))
+                train_loss.append(float(loss.detach()))
                 valid_loss.append(compute_loss(model, val_loader, criterion))
                 model.train()
+                
                 end = time.time()
                 print(f"Epoch {e+1}/{num_epochs}, Iteration {iter_count}, Loss: {loss:.3f}, " +\
                         f"Val loss: {valid_loss[-1]:.3f}, " +\
@@ -130,7 +131,7 @@ def train_model(model, train_data, val_data, test_data,
             iter_count += 1
     
     iters.append(iter_count)
-    train_loss.append(float(loss))
+    train_loss.append(float(loss.detach()))
 
     print('Computing accuracies:')
     val_loader = DataLoader(val_data, batch_size=batch_size)
@@ -168,14 +169,28 @@ def main():
     if not os.path.exists(SAVE_DIR):
         SAVE_DIR.mkdir(parents=True, exist_ok=True)
 
-    N = len(dataset)
-    train_size = int(0.7 * N)
-    val_size   = int(0.2 * N)
-    test_size  = N - train_size - val_size
+    unique_indices = np.unique(dataset.sim_indices)
+    all_indices = np.array(dataset.sim_indices)
 
-    generator = torch.Generator().manual_seed(42)
-    train_dataset, val_dataset, test_dataset = random_split(
-        dataset, [train_size, val_size, test_size], generator=generator)
+    rng = np.random.default_rng(42)
+    rng.shuffle(unique_indices)
+
+    n_total = len(unique_indices)
+    n_train = int(0.7 * n_total)
+    n_val   = int(0.2 * n_total)
+
+    train_sources = unique_indices[:n_train]
+    val_sources   = unique_indices[n_train:n_train+n_val]
+    test_sources  = unique_indices[n_train+n_val:]
+
+    train_indices = np.where(np.isin(all_indices, train_sources))[0]
+    val_indices   = np.where(np.isin(all_indices, val_sources))[0]
+    test_indices  = np.where(np.isin(all_indices, test_sources))[0]
+
+
+    train_dataset = Subset(dataset, train_indices)
+    val_dataset   = Subset(dataset, val_indices)
+    test_dataset  = Subset(dataset, test_indices)
     
     results = train_model(model, train_dataset, val_dataset, test_dataset,
                         batch_size=BATCH_SIZE, learning_rate=LEARNING_RATE, 
