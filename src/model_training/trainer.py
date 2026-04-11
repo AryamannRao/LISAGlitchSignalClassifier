@@ -31,8 +31,8 @@ SAVE_DIR = TRAINING_RESULTS / MASS_CATEGORY /f'run_{datetime.now().strftime("%d%
 
 MODEL_PARAMS = {'ext_high_mass':{'width': 6, 'bn': True, 'normalise': False,
                                 'drop': 0.0, 'num_epochs': 9, 'learning_rate': 0.001, 'batch_size': 64},
-                'high_mass':{'width': 8, 'bn': True, 'normalise': False,
-                            'drop': 0.0, 'num_epochs': 6, 'learning_rate': 0.001, 'batch_size': 64},
+                'high_mass':{'width': 6, 'bn': True, 'normalise': False,
+                            'drop': 0.0, 'num_epochs': 5, 'learning_rate': 0.005, 'batch_size': 64},
                 'low_mass':{'width': 8, 'bn': True, 'normalise': False,
                             'drop': 0.0, 'num_epochs': 9, 'learning_rate': 0.001, 'batch_size': 64}}[MASS_CATEGORY]
 
@@ -48,6 +48,35 @@ PLOT_EVERY = 50
 PRINT_EVERY = 15
 
 DEVICE = torch.device('mps')
+
+def set_seed(seed=42):
+    torch.manual_seed(seed)
+    np.random.seed(seed)
+
+def split_dataset(dataset, train_frac=0.7, val_frac=0.2):
+    unique_indices = np.unique(dataset.sim_indices)
+    all_indices = np.array(dataset.sim_indices)
+
+    rng = np.random.default_rng(42)
+    rng.shuffle(unique_indices)
+
+    n_total = len(unique_indices)
+    n_train = int(train_frac * n_total)
+    n_val   = int(val_frac * n_total)
+
+    train_sources = unique_indices[:n_train]
+    val_sources   = unique_indices[n_train:n_train+n_val]
+    test_sources  = unique_indices[n_train+n_val:]
+
+    train_indices = np.where(np.isin(all_indices, train_sources))[0]
+    val_indices   = np.where(np.isin(all_indices, val_sources))[0]
+    test_indices  = np.where(np.isin(all_indices, test_sources))[0]
+
+    train_dataset = Subset(dataset, train_indices)
+    val_dataset   = Subset(dataset, val_indices)
+    test_dataset  = Subset(dataset, test_indices)
+
+    return train_dataset, val_dataset, test_dataset
 
 def accuracy(model, loader, threshold=0.5):
     model.eval()
@@ -103,6 +132,7 @@ def train_model(model, train_data, val_data, test_data,
 
     start = time.time()
     for e in range(num_epochs):
+        model.train()
         for batch in train_loader:
             images, labels = batch[0].to(DEVICE), batch[1].to(DEVICE)
 
@@ -164,33 +194,14 @@ def plot_results(results):
     plt.savefig(SAVE_DIR / 'training_curves.png')
 
 def main():
+    set_seed(42)
+
     model = CNN(width=WIDTH, bn=USE_BATCH_NORM, normalise=NORMALISE, drop=DROP)
     dataset = LISADataset(DATASET_PATH)
     if not os.path.exists(SAVE_DIR):
         SAVE_DIR.mkdir(parents=True, exist_ok=True)
 
-    unique_indices = np.unique(dataset.sim_indices)
-    all_indices = np.array(dataset.sim_indices)
-
-    rng = np.random.default_rng(42)
-    rng.shuffle(unique_indices)
-
-    n_total = len(unique_indices)
-    n_train = int(0.7 * n_total)
-    n_val   = int(0.2 * n_total)
-
-    train_sources = unique_indices[:n_train]
-    val_sources   = unique_indices[n_train:n_train+n_val]
-    test_sources  = unique_indices[n_train+n_val:]
-
-    train_indices = np.where(np.isin(all_indices, train_sources))[0]
-    val_indices   = np.where(np.isin(all_indices, val_sources))[0]
-    test_indices  = np.where(np.isin(all_indices, test_sources))[0]
-
-
-    train_dataset = Subset(dataset, train_indices)
-    val_dataset   = Subset(dataset, val_indices)
-    test_dataset  = Subset(dataset, test_indices)
+    train_dataset, val_dataset, test_dataset = split_dataset(dataset)
     
     results = train_model(model, train_dataset, val_dataset, test_dataset,
                         batch_size=BATCH_SIZE, learning_rate=LEARNING_RATE, 

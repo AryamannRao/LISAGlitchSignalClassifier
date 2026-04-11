@@ -35,7 +35,12 @@ def suppress_output():
             sys.stdout = old_stdout
             sys.stderr = old_stderr
 
-NSAMPLES = 666
+with h5py.File(orbits_path, 'r') as orb:
+    ORB_TO = orb.attrs['t0']
+    ORB_SIZE = orb.attrs['size']
+    ORB_DT = orb.attrs['dt']
+
+NSAMPLES = 667
 BETA_MIN = 1
 AMP_MIN, AMP_MAX = 1e-16, 1e-10
 INJ_POINTS = ['tm_12', 'tm_23', 'tm_13',
@@ -44,8 +49,9 @@ INJ_POINTS = ['tm_12', 'tm_23', 'tm_13',
 N_WORKERS, CHUNKSIZE = 6, 2
 
 def run_one_sample(args):
-    amp, beta, inj_point, pipe = args
+    amp, beta, inj_point, t0, pipe = args
 
+    pipe['t0'] = t0
     glitches = [{'type':'IntegratedShapeletGlitch', 't_inj': pipe['t_inj'], 'beta':beta,
              'level':2*amp*beta, 'inj_point':inj_point}]
     gws = []
@@ -66,7 +72,7 @@ def run_one_sample(args):
     os.remove(local_sim_path)
     os.remove(local_glitch_path)
 
-    return tdi_dict, amp, beta, inj_point
+    return tdi_dict, amp, beta, inj_point, t0
 
 def run_chunk(job_chunk):
     results = []
@@ -123,15 +129,16 @@ def get_param_values(nsamples):
     beta_array = 10**samples[:,0]
     amp_array  = 10**samples[:,1]
     inj_point_array = np.random.choice(INJ_POINTS, nsamples)
+    t0_array = ORB_TO + np.random.uniform(0.01, 0.99, size=nsamples)*ORB_SIZE*ORB_DT
 
-    return amp_array, beta_array, inj_point_array
+    return amp_array, beta_array, inj_point_array, t0_array
 
 def main():
     start = time.time()
 
-    amp_array, beta_array, inj_point_array = get_param_values(NSAMPLES)
+    amp_array, beta_array, inj_point_array, t0_array = get_param_values(NSAMPLES)
 
-    jobs = [(amp_array[i], beta_array[i], inj_point_array[i], PIPE) for i in range(NSAMPLES)]
+    jobs = [(amp_array[i], beta_array[i], inj_point_array[i], t0_array[i], PIPE) for i in range(NSAMPLES)]
     
     # Create dataset
     if os.path.exists(glitch_dataset_path):
@@ -156,8 +163,8 @@ def main():
             completed_samples += len(results)
             tqdm.write(f"Samples done: {completed_samples}/{total_samples}")
 
-            for tdi_dict, amp, beta, inj_point in results:
-                append_glitch_sample(h5file, tdi_dict, amp, beta, inj_point)
+            for tdi_dict, amp, beta, inj_point, t0 in results:
+                append_glitch_sample(h5file, tdi_dict, amp, beta, inj_point, t0)
     
     #sort_glitch_dataset(h5file)
     h5file.close()

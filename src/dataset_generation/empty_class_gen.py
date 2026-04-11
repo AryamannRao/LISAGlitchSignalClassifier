@@ -34,12 +34,18 @@ def suppress_output():
             sys.stdout = old_stdout
             sys.stderr = old_stderr
 
-NSAMPLES = 666
+with h5py.File(orbits_path, 'r') as orb:
+    ORB_TO = orb.attrs['t0']
+    ORB_SIZE = orb.attrs['size']
+    ORB_DT = orb.attrs['dt']
+
+NSAMPLES = 667
 N_WORKERS, CHUNKSIZE = 6, 2
 
 def run_one_sample(args):
-    pipe = args
+    t0, pipe = args
     gws, glitches = [], []
+    pipe['t0'] = t0
 
     pid = os.getpid()
     local_sim_path = f"{simulation_path}_{pid}.h5"
@@ -56,7 +62,7 @@ def run_one_sample(args):
         tdi_dict = run_tdi(local_sim_path, pipe)
     os.remove(local_sim_path)
 
-    return tdi_dict
+    return tdi_dict, t0
 
 def run_chunk(job_chunk):
     results = []
@@ -75,7 +81,8 @@ def chunkify(lst, chunksize):
 def main():
     start = time.time()
 
-    jobs = [PIPE for i in range(NSAMPLES)]
+    t0_array = ORB_TO + np.random.uniform(0.01, 0.99, size=NSAMPLES)*ORB_SIZE*ORB_DT
+    jobs = [(t0, PIPE) for t0 in t0_array]
     
     if os.path.exists(empty_dataset_path):
         os.remove(empty_dataset_path)
@@ -99,8 +106,8 @@ def main():
             completed_samples += len(results)
             tqdm.write(f"Samples done: {completed_samples}/{total_samples}")
 
-            for tdi_dict in results:
-                append_empty_sample(h5file, tdi_dict)
+            for tdi_dict, t0 in results:
+                append_empty_sample(h5file, tdi_dict, t0)
     
     #sort_empty_dataset(h5file)
     h5file.close()

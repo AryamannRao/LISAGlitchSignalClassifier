@@ -11,7 +11,7 @@ from lisaorbits import OEMOrbits, KeplerianOrbits, StaticConstellation
 from helpers.config import *
 
 ORBITS = OEMOrbits.from_included('esa-trailing')
-YEARS = 2
+YEARS = 4
 DT = 1e5
 
 def make_oem_orbits(years_commissioning = YEARS, orbits_dt = DT):

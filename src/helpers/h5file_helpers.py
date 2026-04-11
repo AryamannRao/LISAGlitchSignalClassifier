@@ -62,12 +62,15 @@ def create_gw_dataset(dataset_path, siglen):
         h5file.create_dataset(
             "gw_lambda",   shape=(0,), maxshape=(None,), dtype="float32"
         )
+        h5file.create_dataset(
+            "t0",   shape=(0,), maxshape=(None,), dtype="float32"
+        )
     else:
         h5file = h5py.File(dataset_path, "a")  # open in append mode
 
     return h5file
 
-def append_gw_sample(h5, tdi_dict, m1, m2, d, spin1, spin2, gw_beta, gw_lambda):
+def append_gw_sample(h5, tdi_dict, m1, m2, d, spin1, spin2, gw_beta, gw_lambda, t0):
     X = tdi_dict["X"]
     Y = tdi_dict["Y"]
     Z = tdi_dict["Z"]
@@ -85,6 +88,7 @@ def append_gw_sample(h5, tdi_dict, m1, m2, d, spin1, spin2, gw_beta, gw_lambda):
     spin2 = np.atleast_1d(spin2)
     gw_beta = np.atleast_1d(gw_beta)
     gw_lambda = np.atleast_1d(gw_lambda)
+    t0 = np.atleast_1d(t0)
     
     batch_size = X.shape[0]
     
@@ -104,6 +108,7 @@ def append_gw_sample(h5, tdi_dict, m1, m2, d, spin1, spin2, gw_beta, gw_lambda):
     h5["spin2"].resize((new_n,))
     h5["gw_beta"].resize((new_n,))
     h5["gw_lambda"].resize((new_n,))
+    h5["t0"].resize((new_n,))
 
     # store batch
     h5["X"][n:new_n] = X.astype("float32")
@@ -117,6 +122,7 @@ def append_gw_sample(h5, tdi_dict, m1, m2, d, spin1, spin2, gw_beta, gw_lambda):
     h5["spin2"][n:new_n] = spin2
     h5["gw_beta"][n:new_n] = gw_beta
     h5["gw_lambda"][n:new_n] = gw_lambda
+    h5["t0"][n:new_n] = t0
 
 def sort_gw_dataset(h5):
     chirp_masses = chirp_mass(h5["m1"][:], h5["m2"][:])
@@ -133,11 +139,11 @@ def sort_gw_dataset(h5):
     tdi_dict_ehm = {"X": h5["X"][ehm], "Y": h5["Y"][ehm], "Z": h5["Z"][ehm]}
 
     append_gw_sample(h5_lm, tdi_dict_lm, h5["m1"][lm], h5["m2"][lm], h5["d"][lm],
-                     h5["spin1"][lm], h5["spin2"][lm], h5["gw_beta"][lm], h5["gw_lambda"][lm])
+                     h5["spin1"][lm], h5["spin2"][lm], h5["gw_beta"][lm], h5["gw_lambda"][lm], h5["t0"][lm])
     append_gw_sample(h5_hm, tdi_dict_hm, h5["m1"][hm], h5["m2"][hm], h5["d"][hm],
-                     h5["spin1"][hm], h5["spin2"][hm], h5["gw_beta"][hm], h5["gw_lambda"][hm])
+                     h5["spin1"][hm], h5["spin2"][hm], h5["gw_beta"][hm], h5["gw_lambda"][hm], h5["t0"][hm])
     append_gw_sample(h5_ehm, tdi_dict_ehm, h5["m1"][ehm], h5["m2"][ehm], h5["d"][ehm],
-                     h5["spin1"][ehm], h5["spin2"][ehm], h5["gw_beta"][ehm], h5["gw_lambda"][ehm])
+                     h5["spin1"][ehm], h5["spin2"][ehm], h5["gw_beta"][ehm], h5["gw_lambda"][ehm], h5["t0"][ehm])
     
 def create_glitch_dataset(dataset_path, siglen):
     if not os.path.exists(dataset_path):
@@ -177,12 +183,16 @@ def create_glitch_dataset(dataset_path, siglen):
         h5file.create_dataset(
             "inj_point",   shape=(0,), maxshape=(None,), dtype=h5py.string_dtype(encoding="utf-8")
         )
+        h5file.create_dataset(
+            "t0",   shape=(0,), maxshape=(None,), dtype="float32"
+        )
+
     else:
         h5file = h5py.File(dataset_path, "a")  # open in append mode
 
     return h5file
 
-def append_glitch_sample(h5, tdi_dict, amp, beta, inj_point):
+def append_glitch_sample(h5, tdi_dict, amp, beta, inj_point, t0):
     X = tdi_dict["X"]
     Y = tdi_dict["Y"]
     Z = tdi_dict["Z"]
@@ -196,7 +206,8 @@ def append_glitch_sample(h5, tdi_dict, amp, beta, inj_point):
     amp = np.atleast_1d(amp)
     beta = np.atleast_1d(beta)
     inj_point = np.atleast_1d(inj_point)
-    
+    t0 = np.atleast_1d(t0)
+
     batch_size = X.shape[0]
     
     # current length
@@ -211,6 +222,7 @@ def append_glitch_sample(h5, tdi_dict, amp, beta, inj_point):
     h5["amp"].resize((new_n,))
     h5["beta"].resize((new_n,))
     h5["inj_point"].resize((new_n,))
+    h5["t0"].resize((new_n,))
 
     # store batch
     h5["X"][n:new_n] = X.astype("float32")
@@ -220,6 +232,7 @@ def append_glitch_sample(h5, tdi_dict, amp, beta, inj_point):
     h5["amp"][n:new_n] = amp
     h5["beta"][n:new_n] = beta
     h5["inj_point"][n:new_n] = inj_point
+    h5["t0"][n:new_n] = t0
 
 def sort_glitch_dataset(h5):
     n = h5["X"].shape[0]
@@ -236,9 +249,9 @@ def sort_glitch_dataset(h5):
     tdi_dict_hm = {"X": h5["X"][hm], "Y": h5["Y"][hm], "Z": h5["Z"][hm]}
     tdi_dict_ehm = {"X": h5["X"][ehm], "Y": h5["Y"][ehm], "Z": h5["Z"][ehm]}
 
-    append_glitch_sample(h5_lm, tdi_dict_lm, h5["level"][lm], h5["beta"][lm], h5["inj_point"][lm])
-    append_glitch_sample(h5_hm, tdi_dict_hm, h5["level"][hm], h5["beta"][hm], h5["inj_point"][hm])
-    append_glitch_sample(h5_ehm, tdi_dict_ehm, h5["level"][ehm], h5["beta"][ehm], h5["inj_point"][ehm])
+    append_glitch_sample(h5_lm, tdi_dict_lm, h5["level"][lm], h5["beta"][lm], h5["inj_point"][lm], h5["t0"][lm])
+    append_glitch_sample(h5_hm, tdi_dict_hm, h5["level"][hm], h5["beta"][hm], h5["inj_point"][hm], h5["t0"][hm])
+    append_glitch_sample(h5_ehm, tdi_dict_ehm, h5["level"][ehm], h5["beta"][ehm], h5["inj_point"][ehm], h5["t0"][ehm])
 
 def create_mixed_dataset(dataset_path, siglen):
     if not os.path.exists(dataset_path):
@@ -292,7 +305,7 @@ def create_mixed_dataset(dataset_path, siglen):
             "gw_lambda",   shape=(0,), maxshape=(None,), dtype="float32"
         )
         h5file.create_dataset(
-            "level",   shape=(0,), maxshape=(None,), dtype="float32"
+            "amp",   shape=(0,), maxshape=(None,), dtype="float32"
         )
         h5file.create_dataset(
             "beta",   shape=(0,), maxshape=(None,), dtype="float32"
@@ -303,13 +316,17 @@ def create_mixed_dataset(dataset_path, siglen):
         h5file.create_dataset(
             "sep",   shape=(0,), maxshape=(None,), dtype="float32"
         )
+        h5file.create_dataset(
+            "t0",   shape=(0,), maxshape=(None,), dtype="float32"
+        )
+
     else:
         h5file = h5py.File(dataset_path, "a")  # open in append mode
 
     return h5file
 
 def append_mixed_sample(h5, tdi_dict, m1, m2, d, spin1, spin2, gw_beta, gw_lambda,
-                        level, beta, inj_point, sep):
+                        amp, beta, inj_point, sep, t0):
     X = tdi_dict["X"]
     Y = tdi_dict["Y"]
     Z = tdi_dict["Z"]
@@ -327,10 +344,11 @@ def append_mixed_sample(h5, tdi_dict, m1, m2, d, spin1, spin2, gw_beta, gw_lambd
     spin2 = np.atleast_1d(spin2)
     gw_beta = np.atleast_1d(gw_beta)
     gw_lambda = np.atleast_1d(gw_lambda)
-    level = np.atleast_1d(level)
+    amp = np.atleast_1d(amp)
     beta = np.atleast_1d(beta)
     inj_point = np.atleast_1d(inj_point)
     sep = np.atleast_1d(sep)
+    t0 = np.atleast_1d(t0)
     
     batch_size = X.shape[0]
     
@@ -350,10 +368,11 @@ def append_mixed_sample(h5, tdi_dict, m1, m2, d, spin1, spin2, gw_beta, gw_lambd
     h5["spin2"].resize((new_n,))
     h5["gw_beta"].resize((new_n,))
     h5["gw_lambda"].resize((new_n,))
-    h5["level"].resize((new_n,))
+    h5["amp"].resize((new_n,))
     h5["beta"].resize((new_n,))
     h5["inj_point"].resize((new_n,))
     h5["sep"].resize((new_n,))
+    h5["t0"].resize((new_n,))
 
     # store batch
     h5["X"][n:new_n] = X.astype("float32")
@@ -367,10 +386,11 @@ def append_mixed_sample(h5, tdi_dict, m1, m2, d, spin1, spin2, gw_beta, gw_lambd
     h5["spin2"][n:new_n] = spin2
     h5["gw_beta"][n:new_n] = gw_beta
     h5["gw_lambda"][n:new_n] = gw_lambda
-    h5["level"][n:new_n] = level
+    h5["amp"][n:new_n] = amp
     h5["beta"][n:new_n] = beta
     h5["inj_point"][n:new_n] = inj_point
     h5["sep"][n:new_n] = sep
+    h5["t0"][n:new_n] = t0
 
 def sort_mixed_dataset(h5):
     chirp_masses = chirp_mass(h5["m1"][:], h5["m2"][:])
@@ -388,14 +408,14 @@ def sort_mixed_dataset(h5):
 
     append_mixed_sample(h5_lm, tdi_dict_lm, h5["m1"][lm], h5["m2"][lm], h5["d"][lm],
                      h5["spin1"][lm], h5["spin2"][lm], h5["gw_beta"][lm], h5["gw_lambda"][lm],
-                     h5["level"][lm], h5["beta"][lm], h5["inj_point"][lm], h5["sep"][lm])
+                     h5["amp"][lm], h5["beta"][lm], h5["inj_point"][lm], h5["sep"][lm], h5["t0"][lm])
     append_mixed_sample(h5_hm, tdi_dict_hm, h5["m1"][hm], h5["m2"][hm], h5["d"][hm],
                      h5["spin1"][hm], h5["spin2"][hm], h5["gw_beta"][hm], h5["gw_lambda"][hm],
-                     h5["level"][hm], h5["beta"][hm], h5["inj_point"][hm], h5["sep"][hm])
+                     h5["amp"][hm], h5["beta"][hm], h5["inj_point"][hm], h5["sep"][hm], h5["t0"][hm])
     append_mixed_sample(h5_ehm, tdi_dict_ehm, h5["m1"][ehm], h5["m2"][ehm], h5["d"][ehm],
                      h5["spin1"][ehm], h5["spin2"][ehm], h5["gw_beta"][ehm], h5["gw_lambda"][ehm],
-                     h5["level"][ehm], h5["beta"][ehm], h5["inj_point"][ehm], h5["sep"][ehm])
-    
+                     h5["amp"][ehm], h5["beta"][ehm], h5["inj_point"][ehm], h5["sep"][ehm], h5["t0"][ehm])
+
 def create_empty_dataset(dataset_path, siglen):
     if not os.path.exists(dataset_path):
         h5file = h5py.File(dataset_path, "w")
@@ -424,12 +444,15 @@ def create_empty_dataset(dataset_path, siglen):
             chunks=(1, siglen),
             compression="gzip",
         )
+        h5file.create_dataset(
+            "t0",   shape=(0,), maxshape=(None,), dtype="float32"
+        )
     else:
         h5file = h5py.File(dataset_path, "a")  # open in append mode
 
     return h5file
 
-def append_empty_sample(h5, tdi_dict):
+def append_empty_sample(h5, tdi_dict, t0):
 
     X = tdi_dict["X"]
     Y = tdi_dict["Y"]
@@ -440,7 +463,8 @@ def append_empty_sample(h5, tdi_dict):
     X = np.atleast_2d(X)
     Y = np.atleast_2d(Y)
     Z = np.atleast_2d(Z)
-    
+    t0 = np.atleast_1d(t0)
+
     batch_size = X.shape[0]
     
     # current length
@@ -451,11 +475,13 @@ def append_empty_sample(h5, tdi_dict):
     h5["X"].resize((new_n, X.shape[1]))
     h5["Y"].resize((new_n, Y.shape[1]))
     h5["Z"].resize((new_n, Z.shape[1]))
+    h5["t0"].resize((new_n,))
 
     # store batch
     h5["X"][n:new_n] = X.astype("float32")
     h5["Y"][n:new_n] = Y.astype("float32")
     h5["Z"][n:new_n] = Z.astype("float32")
+    h5["t0"][n:new_n] = t0
 
 def sort_empty_dataset(h5):
     n = h5["X"].shape[0]
@@ -472,9 +498,9 @@ def sort_empty_dataset(h5):
     tdi_dict_hm = {"X": h5["X"][hm], "Y": h5["Y"][hm], "Z": h5["Z"][hm]}
     tdi_dict_ehm = {"X": h5["X"][ehm], "Y": h5["Y"][ehm], "Z": h5["Z"][ehm]}
 
-    append_empty_sample(h5_lm, tdi_dict_lm)
-    append_empty_sample(h5_hm, tdi_dict_hm)
-    append_empty_sample(h5_ehm, tdi_dict_ehm)
+    append_empty_sample(h5_lm, tdi_dict_lm, h5["t0"][lm])
+    append_empty_sample(h5_hm, tdi_dict_hm, h5["t0"][hm])
+    append_empty_sample(h5_ehm, tdi_dict_ehm, h5["t0"][ehm])
 
 def create_imageset(dataset_path, time_steps, resolution, keys):
     image_key, tarr_key, farr_key = keys

@@ -3,6 +3,7 @@ os.environ["OMP_NUM_THREADS"] = "1"
 os.environ["MKL_NUM_THREADS"] = "1"
 os.environ["OPENBLAS_NUM_THREADS"] = "1"
 
+from posixpath import sep
 import sys
 import contextlib
 import numpy as np
@@ -35,6 +36,11 @@ def suppress_output():
             sys.stdout = old_stdout
             sys.stderr = old_stderr
 
+with h5py.File(orbits_path, 'r') as orb:
+    ORB_TO = orb.attrs['t0']
+    ORB_SIZE = orb.attrs['size']
+    ORB_DT = orb.attrs['dt']
+
 NSAMPLES = 2000
 LOG_MASS_MIN, LOG_MASS_MAX = 4, 7
 Q_MIN, Q_MAX = 1, 5
@@ -51,8 +57,9 @@ SEP_MIN, SEP_MAX = -1.5, 1.5
 N_WORKERS, CHUNKSIZE = 6, 2
 
 def run_one_sample(args):
-    m1, m2, d, spin1, spin2, gw_beta, gw_lambda, amp, beta, inj_point, sep, pipe = args
+    m1, m2, d, spin1, spin2, gw_beta, gw_lambda, amp, beta, inj_point, sep, t0, pipe = args
 
+    pipe['t0'] = t0
     gws = [{'type': 'BinaryInspiralGW',
         'm1': m1, 'm2': m2, 'd': d,
         'spin1': spin1, 'spin2': spin2,
@@ -72,7 +79,7 @@ def run_one_sample(args):
             gws, glitches, pipe,
             local_gw_path, local_glitch_path, orbits_path,
             local_sim_path,
-            disable_noise=PIPE['keep_noises']
+            disable_noise=pipe['keep_noises']
         )
         tdi_dict = run_tdi(local_sim_path, pipe)
 
@@ -80,7 +87,8 @@ def run_one_sample(args):
     os.remove(local_gw_path)
     os.remove(local_glitch_path)
 
-    return tdi_dict, m1, m2, d, spin1, spin2, gw_beta, gw_lambda, amp, beta, inj_point, sep
+    return tdi_dict, m1, m2, d, spin1, spin2,\
+        gw_beta, gw_lambda, amp, beta, inj_point, sep, t0
 
 def run_chunk(job_chunk):
     results = []
@@ -143,22 +151,23 @@ def get_param_values(nsamples):
     inj_point_array = np.random.choice(INJ_POINTS, nsamples)
 
     sep_array = np.random.uniform(SEP_MIN, SEP_MAX, nsamples)
+    t0_array = ORB_TO + np.random.uniform(0.01, 0.99, size=nsamples)*ORB_SIZE*ORB_DT
 
     return m1_array, m2_array, d_array,\
           spin1_array, spin2_array, gw_beta_array, gw_lambda_array,\
-            amp_array, beta_array, inj_point_array, sep_array
+            amp_array, beta_array, inj_point_array, sep_array, t0_array
 
 def main():
     start = time.time()
 
     m1_array, m2_array, d_array, spin1_array, spin2_array, gw_beta_array, gw_lambda_array,\
-         amp_array, beta_array, inj_point_array, sep_array = get_param_values(NSAMPLES)
+         amp_array, beta_array, inj_point_array, sep_array, t0_array = get_param_values(NSAMPLES)
 
     jobs = [(m1_array[i], m2_array[i], d_array[i], 
              spin1_array[i], spin2_array[i], 
              gw_beta_array[i], gw_lambda_array[i],
              amp_array[i], beta_array[i], inj_point_array[i],
-             sep_array[i], PIPE) for i in range(NSAMPLES)]
+             sep_array[i], t0_array[i], PIPE) for i in range(NSAMPLES)]
 
     if os.path.exists(mixed_dataset_path):
         os.remove(mixed_dataset_path)
@@ -182,9 +191,9 @@ def main():
             completed_samples += len(results)
             tqdm.write(f"Samples done: {completed_samples}/{total_samples}")
             
-            for tdi_dict, m1, m2, d, spin1, spin2, gw_beta, gw_lambda, amp, beta, inj_point, sep in results:
+            for tdi_dict, m1, m2, d, spin1, spin2, gw_beta, gw_lambda, amp, beta, inj_point, sep, t0 in results:
                 append_mixed_sample(h5file, tdi_dict, m1, m2, d, spin1, spin2, gw_beta, gw_lambda,
-                                    amp, beta, inj_point, sep)
+                                    amp, beta, inj_point, sep, t0)
 
     sort_mixed_dataset(h5file)
     h5file.close()
