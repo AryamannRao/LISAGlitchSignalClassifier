@@ -18,31 +18,17 @@ from torch.utils.data import random_split, DataLoader, Subset
 from model import CNN, LISADataset
 from helpers.config import *
 
-MASS_CATEGORY = 'high_mass'  # 'low_mass', 'high_mass', 'ext_high_mass'
+DATASET_PATH = training_dataset_path
 
-if MASS_CATEGORY == 'low_mass':
-    DATASET_PATH = training_lm_dataset_path
-elif MASS_CATEGORY == 'high_mass':
-    DATASET_PATH = training_hm_dataset_path
-elif MASS_CATEGORY == 'ext_high_mass':
-    DATASET_PATH = training_ehm_dataset_path
+SAVE_DIR = TRAINING_RESULTS / f'run_{datetime.now().strftime("%d%m%y_%H%M%S")}'
 
-SAVE_DIR = TRAINING_RESULTS / MASS_CATEGORY /f'run_{datetime.now().strftime("%d%m%y_%H%M%S")}'
-
-MODEL_PARAMS = {'ext_high_mass':{'width': 6, 'bn': True, 'normalise': False,
-                                'drop': 0.0, 'num_epochs': 9, 'learning_rate': 0.001, 'batch_size': 64},
-                'high_mass':{'width': 6, 'bn': True, 'normalise': False,
-                            'drop': 0.0, 'num_epochs': 5, 'learning_rate': 0.005, 'batch_size': 64},
-                'low_mass':{'width': 8, 'bn': True, 'normalise': False,
-                            'drop': 0.0, 'num_epochs': 9, 'learning_rate': 0.001, 'batch_size': 64}}[MASS_CATEGORY]
-
-WIDTH = MODEL_PARAMS['width']
-USE_BATCH_NORM = MODEL_PARAMS['bn']
-NORMALISE = MODEL_PARAMS['normalise']
-BATCH_SIZE = MODEL_PARAMS['batch_size']
-LEARNING_RATE = MODEL_PARAMS['learning_rate']
-NUM_EPOCHS = MODEL_PARAMS['num_epochs']
-DROP = MODEL_PARAMS['drop']
+WIDTH = 4
+USE_BATCH_NORM = True
+NORMALISE = False
+BATCH_SIZE = 64
+LEARNING_RATE = 0.0008
+NUM_EPOCHS = 6
+DROP = 0.0
 
 PLOT_EVERY = 50
 PRINT_EVERY = 15

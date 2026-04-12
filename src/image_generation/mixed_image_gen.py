@@ -21,20 +21,12 @@ from helpers.config import *
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from tqdm import tqdm
 
-MASS_CATEGORY = 'ext_high_mass'  # 'low_mass', 'high_mass', 'ext_high_mass'
-SPEC = SPECS[MASS_CATEGORY]
-
-if MASS_CATEGORY == 'low_mass':
-    FILE_PATH = mixed_lm_dataset_path
-elif MASS_CATEGORY == 'high_mass':
-    FILE_PATH = mixed_hm_dataset_path
-elif MASS_CATEGORY == 'ext_high_mass':
-    FILE_PATH = mixed_ehm_dataset_path
+FILE_PATH = mixed_dataset_path
 
 RESOLUTION = 256
 TIME_STEP = 5
+CHANNELS = 2
 N_WORKERS, CHUNKSIZE = 6, 2
-REPRESENTATION = 'qscan'  # 'qscan' or 'varqscan'
 
 def run_one_sample(args):
     tcen0, sep, X, Y, Z = args
@@ -42,25 +34,25 @@ def run_one_sample(args):
     
     tcen_arr = np.linspace(-(2-np.abs(sep)), 2-np.abs(sep), TIME_STEP)*3600 + tcen0
     
-    images = np.zeros((len(tcen_arr), RESOLUTION, RESOLUTION, 3))
-    t_axes = np.zeros((len(tcen_arr), RESOLUTION))
-    f_axes = np.zeros((len(tcen_arr), RESOLUTION))
+    images = np.zeros((len(tcen_arr), RESOLUTION, RESOLUTION, CHANNELS))
+    t_axes = np.zeros((len(tcen_arr), RESOLUTION, CHANNELS))
+    f_axes = np.zeros((len(tcen_arr), RESOLUTION, CHANNELS))
     tcen_vals = np.zeros(len(tcen_arr))
 
     for i, tcen in enumerate(tcen_arr):
         event = {'t_inj': PIPE['t_inj'] - tcen}
-        QT = np.zeros((RESOLUTION, RESOLUTION, 3))
-        for channel in ['A', 'E', 'T']:
-            if REPRESENTATION == 'varqscan':
-                t_arr, f_arr, data = varq_transform(tdi_dict, channel, PIPE, event, resolution=RESOLUTION,
-                                            frange=SPEC['frange'], trange=SPEC['trange'], Qvals=SPEC['Qvals'])
-            elif REPRESENTATION == 'qscan':
-                t_arr, f_arr, data = generate_qscan(tdi_dict, channel, PIPE, event, resolution=RESOLUTION,
-                                frange=SPEC['frange'], trange=SPEC['trange'], Q=SPEC['Q'])
+        QT = np.zeros((RESOLUTION, RESOLUTION, CHANNELS))
+        t_axis = np.zeros((RESOLUTION, CHANNELS))
+        f_axis = np.zeros((RESOLUTION, CHANNELS))
+        for j, spec in enumerate([SPECS['high_mass'], SPECS['ext_high_mass']]):
+            t_arr, f_arr, data = generate_qscan(tdi_dict, 'A', PIPE, event, resolution=RESOLUTION,
+                                frange=spec['frange'], trange=spec['trange'], Q=spec['Q'])
 
-            QT[:, :, ['A', 'E', 'T'].index(channel)] = data
+            QT[:, :, j] = data
+            t_axis[:, j] = t_arr
+            f_axis[:, j] = f_arr
         
-        images[i], t_axes[i], f_axes[i], tcen_vals[i] = QT, t_arr, f_arr, tcen
+        images[i], t_axes[i], f_axes[i], tcen_vals[i] = QT, t_axis, f_axis, tcen
 
     return images, t_axes, f_axes, tcen_vals
 
@@ -81,15 +73,12 @@ def chunkify(lst, chunksize):
 def main():
     start = time.time()
 
-    if REPRESENTATION == 'varqscan':
-        keys = ['varQT', 't_varq', 'f_varq']
-    elif REPRESENTATION == 'qscan':
-        keys = ['QT', 't_qscan', 'f_qscan']
+    keys = ['QT', 't_qscan', 'f_qscan']
 
     h5file = h5py.File(FILE_PATH, "r+")
     if keys[0] not in h5file:
         h5file.close()
-        h5file = create_imageset(FILE_PATH, TIME_STEP, RESOLUTION, keys=keys)
+        h5file = create_imageset(FILE_PATH, TIME_STEP, RESOLUTION, CHANNELS, keys=keys)
         X_array = h5file["X"][:]
         Y_array = h5file["Y"][:]
         Z_array = h5file["Z"][:]

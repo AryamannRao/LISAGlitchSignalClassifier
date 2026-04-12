@@ -16,8 +16,8 @@ if str(SRC_ROOT) not in sys.path:
 from helpers.config import *
 
 DEVICE = torch.device('mps')
-TRAIN, VAL, TEST = split_dataset(LISADataset(training_hm_dataset_path))
-N_TRIALS = 1
+TRAIN, VAL, TEST = split_dataset(LISADataset(training_dataset_path))
+N_TRIALS = 10
 
 def pseudo_train(model, train_data, val_data,
                 learning_rate, batch_size,
@@ -49,7 +49,7 @@ def objective(trial):
     set_seed(42)
 
     lr = trial.suggest_float("lr", 1e-4, 1e-2, log=True)
-    width = trial.suggest_categorical("width", [4, 6, 8, 10])
+    width = trial.suggest_categorical("width", [4, 6, 8])
     
     model = CNN(width=width, bn=True, normalise=False, drop=0.0)
     

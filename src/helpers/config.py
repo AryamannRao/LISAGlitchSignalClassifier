@@ -50,6 +50,7 @@ empty_ehm_dataset_path = str(EMPTY_DATASETS / 'empty_ehm_dataset.h5')
 training_lm_dataset_path = str(TRAINING_DATASETS / 'training_lm_dataset.h5')
 training_hm_dataset_path = str(TRAINING_DATASETS / 'training_hm_dataset.h5')
 training_ehm_dataset_path = str(TRAINING_DATASETS / 'training_ehm_dataset.h5')
+training_dataset_path = str(TRAINING_DATASETS / 'training_dataset.h5')
 
 with h5py.File(orbits_path, 'r') as orb:
     orb_t0 = orb.attrs['t0']

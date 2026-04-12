@@ -12,7 +12,7 @@ class CNN(nn.Module):
         self.bn = bn
         self.norm = normalise
         self.drop = drop
-        self.conv1 = nn.Conv2d(in_channels=3,
+        self.conv1 = nn.Conv2d(in_channels=2,
                                out_channels=self.width,
                                kernel_size=3,
                                padding=1)

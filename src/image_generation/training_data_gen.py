@@ -34,10 +34,10 @@ def generate_dataset(loc, paths):
 
             img_ds = f.create_dataset(
                 "images",
-                shape=(total,256,256,3),
+                shape=(total,256,256,2),
                 dtype="float32",
                 compression="lzf",
-                chunks=(64,256,256,3)
+                chunks=(64,256,256,2)
             )
 
             label_ds = f.create_dataset(
@@ -72,7 +72,7 @@ def generate_dataset(loc, paths):
                     arr = f_in[KEY][:]
 
                 # flatten
-                flat = arr.reshape(-1,256,256,3)
+                flat = arr.reshape(-1,256,256,2)
                 
                 sim_indices = np.repeat(np.arange(arr.shape[0]), arr.shape[1])
                 time_indices = np.tile(np.arange(arr.shape[1]), arr.shape[0])
@@ -93,18 +93,10 @@ def generate_dataset(loc, paths):
 
 def main():
     start = time.time()
-    generate_dataset(training_lm_dataset_path, 
-                        (gw_lm_dataset_path, glitch_lm_dataset_path, mixed_lm_dataset_path, empty_lm_dataset_path))
+    generate_dataset(training_dataset_path, 
+                        (gw_dataset_path, glitch_dataset_path, mixed_dataset_path, empty_dataset_path))
     end = time.time()
-    print(f"Low mass dataset generation took {end - start:.2f} seconds")
-    generate_dataset(training_hm_dataset_path, 
-                        (gw_hm_dataset_path, glitch_hm_dataset_path, mixed_hm_dataset_path, empty_hm_dataset_path))
-    end2 = time.time()
-    print(f"High mass dataset generation took {end2 - end:.2f} seconds")
-    generate_dataset(training_ehm_dataset_path, 
-                        (gw_ehm_dataset_path, glitch_ehm_dataset_path, mixed_ehm_dataset_path, empty_ehm_dataset_path))
-    end3 = time.time()
-    print(f"Ext high mass dataset generation took {end3 - end2:.2f} seconds")
+    print(f"Training dataset generation took {end - start:.2f} seconds")
 
 if __name__ == "__main__":
     main()

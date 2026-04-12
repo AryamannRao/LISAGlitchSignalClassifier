@@ -502,23 +502,25 @@ def sort_empty_dataset(h5):
     append_empty_sample(h5_hm, tdi_dict_hm, h5["t0"][hm])
     append_empty_sample(h5_ehm, tdi_dict_ehm, h5["t0"][ehm])
 
-def create_imageset(dataset_path, time_steps, resolution, keys):
+def create_imageset(dataset_path, time_steps, resolution, channels, keys):
     image_key, tarr_key, farr_key = keys
     h5file = h5py.File(dataset_path, "a")
 
     h5file.create_dataset(
         image_key, 
-        shape=(0, time_steps, resolution, resolution, 3),
-        maxshape=(None,time_steps, resolution, resolution, 3),  # unlimited along axis 0
+        shape=(0, time_steps, resolution, resolution, channels),
+        maxshape=(None,time_steps, resolution, resolution, channels),  # unlimited along axis 0
         dtype="float32",
-        chunks=(1, time_steps, resolution, resolution, 3),       # good practice
+        chunks=(1, time_steps, resolution, resolution, channels),       # good practice
         compression="gzip"
     )
     h5file.create_dataset(
-        tarr_key,   shape=(0, time_steps, resolution), maxshape=(None,time_steps, resolution), dtype="float32"
+        tarr_key,   shape=(0, time_steps, resolution, channels),
+        maxshape=(None,time_steps, resolution, channels), dtype="float32"
     )
     h5file.create_dataset(
-        farr_key,   shape=(0, time_steps, resolution), maxshape=(None,time_steps, resolution), dtype="float32"
+        farr_key,   shape=(0, time_steps, resolution, channels),
+        maxshape=(None,time_steps, resolution, channels), dtype="float32"
     )
     h5file.create_dataset(
     "tcen",
@@ -534,9 +536,9 @@ def append_image(h5, image, t_arr, f_arr, tcen, keys):
 
     if image.ndim == 4:
         image = np.expand_dims(image, axis=0)
-    if t_arr.ndim == 2:
+    if t_arr.ndim == 3:
         t_arr = np.expand_dims(t_arr, axis=0)
-    if f_arr.ndim == 2:
+    if f_arr.ndim == 3:
         f_arr = np.expand_dims(f_arr, axis=0)
     tcen = np.atleast_2d(tcen)
     
@@ -548,8 +550,8 @@ def append_image(h5, image, t_arr, f_arr, tcen, keys):
 
     # resize datasets
     h5[image_key].resize((new_n, image.shape[1], image.shape[2], image.shape[3], image.shape[4]))
-    h5[tarr_key].resize((new_n, t_arr.shape[1], t_arr.shape[2]))
-    h5[farr_key].resize((new_n, f_arr.shape[1], f_arr.shape[2]))
+    h5[tarr_key].resize((new_n, t_arr.shape[1], t_arr.shape[2], t_arr.shape[3]))
+    h5[farr_key].resize((new_n, f_arr.shape[1], f_arr.shape[2], f_arr.shape[3]))
     h5["tcen"].resize((new_n, tcen.shape[1]))
 
     # store batch
