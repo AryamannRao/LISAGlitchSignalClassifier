@@ -58,12 +58,6 @@ with h5py.File(orbits_path, 'r') as orb:
 
 PIPE = {'t0': orb_t0 + orb_size*orb_dt/2, 'dt': 0.25,'size': int(10 * 3600 / 0.25),
         't_inj': 5 * 3600, 'keep_noises': ['test-mass', 'oms']}
-SPECS = {'low_mass': {'trange':(-3, 3), 'frange':(1e-3, 1e-1), 
-                      'Qvals':np.linspace(29, 31, 5), 'Q':30,
-                      'drange':np.logspace(3, 4, 5)},
-         'high_mass': {'trange':(-3, 3), 'frange':(1e-3, 1e-1), 
-                      'Qvals':np.linspace(15, 17, 5), 'Q':16,
-                      'drange':np.logspace(3, 5, 5)},
-         'ext_high_mass': {'trange':(-3, 3), 'frange':(1e-4, 1e-2), 
-                       'Qvals':np.linspace(5, 7, 5), 'Q':6,
-                       'drange':np.logspace(4, 5, 5)}}
+SPECS = {'low_mass': {'trange':(-3, 3), 'frange':(1e-3, 1e-1), 'Q':30},
+         'high_mass': {'trange':(-3, 3), 'frange':(1e-4, 1e-1), 'Q':6},
+         'ext_high_mass': {'trange':(-3, 3), 'frange':(1e-4, 1e-2), 'Q':6}}

@@ -7,7 +7,6 @@ import matplotlib.pyplot as plt
 import sys
 from pathlib import Path
 
-# Ensure src is on Python path regardless of where code is run from
 SRC_ROOT = Path(__file__).resolve().parent.parent
 if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
@@ -30,11 +29,14 @@ elif MASS_CATEGORY == 'ext_high_mass':
 SAVE_DIR = TRAINING_RESULTS / MASS_CATEGORY /f'run_{datetime.now().strftime("%d%m%y_%H%M%S")}'
 
 MODEL_PARAMS = {'ext_high_mass':{'width': 6, 'bn': True, 'normalise': False,
-                                'drop': 0.0, 'num_epochs': 9, 'learning_rate': 0.001, 'batch_size': 64},
+                                'drop': 0.0, 'num_epochs': 9, 'learning_rate': 0.001,
+                                'batch_size': 64, 'plot_every': 50},
                 'high_mass':{'width': 6, 'bn': True, 'normalise': False,
-                            'drop': 0.0, 'num_epochs': 5, 'learning_rate': 0.005, 'batch_size': 64},
-                'low_mass':{'width': 8, 'bn': True, 'normalise': False,
-                            'drop': 0.0, 'num_epochs': 9, 'learning_rate': 0.001, 'batch_size': 64}}[MASS_CATEGORY]
+                            'drop': 0.0, 'num_epochs': 6, 'learning_rate': 0.001,
+                            'batch_size': 64, 'plot_every': 33},
+                'low_mass':{'width': 6, 'bn': True, 'normalise': False,
+                            'drop': 0.0, 'num_epochs': 9, 'learning_rate': 0.001,
+                            'batch_size': 64, 'plot_every': 50}}[MASS_CATEGORY]
 
 WIDTH = MODEL_PARAMS['width']
 USE_BATCH_NORM = MODEL_PARAMS['bn']
@@ -43,9 +45,7 @@ BATCH_SIZE = MODEL_PARAMS['batch_size']
 LEARNING_RATE = MODEL_PARAMS['learning_rate']
 NUM_EPOCHS = MODEL_PARAMS['num_epochs']
 DROP = MODEL_PARAMS['drop']
-
-PLOT_EVERY = 50
-PRINT_EVERY = 15
+PLOT_EVERY = MODEL_PARAMS['plot_every']
 
 DEVICE = torch.device('mps')
 
@@ -112,7 +112,7 @@ def compute_loss(model, loader, criterion):
 
 def train_model(model, train_data, val_data, test_data,
                 learning_rate=0.005, batch_size=10,
-                num_epochs=10, plot_every=10, print_every=10):
+                num_epochs=10, plot_every=10):
     model = model.to(DEVICE)
     train_loader = DataLoader(train_data, batch_size=batch_size, shuffle=True)
     
@@ -205,7 +205,7 @@ def main():
     
     results = train_model(model, train_dataset, val_dataset, test_dataset,
                         batch_size=BATCH_SIZE, learning_rate=LEARNING_RATE, 
-                        num_epochs=NUM_EPOCHS, plot_every=PLOT_EVERY, print_every=PRINT_EVERY)
+                        num_epochs=NUM_EPOCHS, plot_every=PLOT_EVERY)
     
     torch.save(model.state_dict(), SAVE_DIR / 'model_weights.pth')
     torch.save(results, SAVE_DIR / 'results.pt')

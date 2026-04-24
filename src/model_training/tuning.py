@@ -17,7 +17,7 @@ from helpers.config import *
 
 DEVICE = torch.device('mps')
 TRAIN, VAL, TEST = split_dataset(LISADataset(training_hm_dataset_path))
-N_TRIALS = 1
+N_TRIALS = 8
 
 def pseudo_train(model, train_data, val_data,
                 learning_rate, batch_size,
