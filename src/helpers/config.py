@@ -51,6 +51,10 @@ training_lm_dataset_path = str(TRAINING_DATASETS / 'training_lm_dataset.h5')
 training_hm_dataset_path = str(TRAINING_DATASETS / 'training_hm_dataset.h5')
 training_ehm_dataset_path = str(TRAINING_DATASETS / 'training_ehm_dataset.h5')
 
+model_lm_weights_path = str(DIST / 'model_weights' / 'low_mass'/ 'weights.pth')
+model_hm_weights_path = str(DIST / 'model_weights' / 'high_mass'/ 'weights.pth')
+model_ehm_weights_path = str(DIST / 'model_weights' / 'ext_high_mass'/ 'weights.pth')
+
 with h5py.File(orbits_path, 'r') as orb:
     orb_t0 = orb.attrs['t0']
     orb_size = orb.attrs['size']
@@ -61,3 +65,13 @@ PIPE = {'t0': orb_t0 + orb_size*orb_dt/2, 'dt': 0.25,'size': int(10 * 3600 / 0.2
 SPECS = {'low_mass': {'trange':(-3, 3), 'frange':(1e-3, 1e-1), 'Q':30},
          'high_mass': {'trange':(-3, 3), 'frange':(1e-4, 1e-1), 'Q':6},
          'ext_high_mass': {'trange':(-3, 3), 'frange':(1e-4, 1e-2), 'Q':6}}
+
+MODEL_PARAM_DICT = {'ext_high_mass':{'width': 6, 'bn': True, 'normalise': False,
+                                'drop': 0.0, 'num_epochs': 9, 'learning_rate': 0.001,
+                                'batch_size': 64, 'plot_every': 50},
+                'high_mass':{'width': 6, 'bn': True, 'normalise': False,
+                            'drop': 0.0, 'num_epochs': 6, 'learning_rate': 0.001,
+                            'batch_size': 64, 'plot_every': 33},
+                'low_mass':{'width': 4, 'bn': True, 'normalise': False,
+                            'drop': 0.0, 'num_epochs': 4, 'learning_rate': 0.001,
+                            'batch_size': 64, 'plot_every': 22}}
