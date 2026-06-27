@@ -1,8 +1,11 @@
 import os
+
+import torch
 os.environ["OMP_NUM_THREADS"] = "1"
 os.environ["MKL_NUM_THREADS"] = "1"
 os.environ["OPENBLAS_NUM_THREADS"] = "1"
 
+from posixpath import sep
 import sys
 import contextlib
 import numpy as np
@@ -22,6 +25,11 @@ from helpers.config import *
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from tqdm import tqdm
 
+from model_training.model import CNN, LISADataset
+
+import torch
+from torch.utils.data import random_split, DataLoader, Subset
+
 @contextlib.contextmanager
 def suppress_output():
     with open(os.devnull, "w") as devnull:
@@ -35,36 +43,35 @@ def suppress_output():
             sys.stdout = old_stdout
             sys.stderr = old_stderr
 
-with h5py.File(orbits_path, 'r') as orb:
-    ORB_TO = orb.attrs['t0']
-    ORB_SIZE = orb.attrs['size']
-    ORB_DT = orb.attrs['dt']
 
-NSAMPLES = 1000
-MASS_CATEGORY = 'low_mass'
+MIXED_SIM_INFERENCE_PATH = INFERENCE_DATASETS / 'seperation_analysis' / 'mixed_sim_inference.h5'
+
+RESOLUTION = 256
+N_WORKERS, CHUNKSIZE = 6, 2
+TIME_STEP = 20
+MASS_CATEGORY = 'low_mass'  # 'low_mass', 'high_mass', 'ext_high_mass'
+
+DEVICE = torch.device('mps')
+TRANSIENT_NAMES = {1: 'gw', 2: 'glitch', 3: 'mixed'}
+
+SAVE_DIR = INFERENCE_DATASETS / 'timecen_datasets' / MASS_CATEGORY
+
+TRANSIENT_DICT = {1: {'low_mass': gw_lm_dataset_path, 'high_mass': gw_hm_dataset_path, 'ext_high_mass': gw_ehm_dataset_path},
+                  2: {'low_mass': glitch_lm_dataset_path, 'high_mass': glitch_hm_dataset_path, 'ext_high_mass': glitch_ehm_dataset_path},
+                  3: {'low_mass': mixed_lm_dataset_path, 'high_mass': mixed_hm_dataset_path, 'ext_high_mass': mixed_ehm_dataset_path}}
+
+MODEL_PARAMS = MODEL_PARAM_DICT[MASS_CATEGORY]
+SPEC = SPECS[MASS_CATEGORY]
 
 if MASS_CATEGORY == 'low_mass':
-    FILE_PATH = mixed_lm_dataset_path
-    LOG_MASS_MIN, LOG_MASS_MAX = 4, 5
+    DATASET_PATH = training_lm_dataset_path
+    WEIGHTS_PATH = model_lm_weights_path
 elif MASS_CATEGORY == 'high_mass':
-    FILE_PATH = mixed_hm_dataset_path
-    LOG_MASS_MIN, LOG_MASS_MAX = 5, 6
+    DATASET_PATH = training_hm_dataset_path
+    WEIGHTS_PATH = model_hm_weights_path
 elif MASS_CATEGORY == 'ext_high_mass':
-    FILE_PATH = mixed_ehm_dataset_path
-    LOG_MASS_MIN, LOG_MASS_MAX = 6, 7
-
-Q_MIN, Q_MAX = 1, 5
-LOG_D_MIN, LOG_D_MAX = 3, 5
-SPIN_MIN, SPIN_MAX = 0, 0.99
-
-BETA_MIN = 1
-AMP_MIN, AMP_MAX = 1e-16, 1e-10
-INJ_POINTS = ['tm_12', 'tm_23', 'tm_13',
-              'tm_21', 'tm_32', 'tm_31']
-
-SEP_MIN, SEP_MAX = -1.5, 1.5
-
-N_WORKERS, CHUNKSIZE = 6, 2
+    DATASET_PATH = training_ehm_dataset_path
+    WEIGHTS_PATH = model_ehm_weights_path
 
 def run_one_sample(args):
     m1, m2, d, spin1, spin2, gw_beta, gw_lambda, amp, beta, inj_point, sep, t0, pipe = args
@@ -114,78 +121,81 @@ def chunkify(lst, chunksize):
     for i in range(0, len(lst), chunksize):
         yield lst[i:i + chunksize]
 
-def truncated_2d_gaussian(mu, cov, xmin, size):
-    mu_x, mu_y = mu
-    
-    # Step 1: sample x (vectorized)
-    sigma_x = np.sqrt(cov[0, 0])
-    a = (xmin - mu_x) / sigma_x
-    
-    x = truncnorm.rvs(a, np.inf, loc=mu_x, scale=sigma_x, size=size)
-    
-    # Step 2: compute conditional mean (vectorized)
-    beta = cov[1, 0] / cov[0, 0]
-    mu_cond = mu_y + beta * (x - mu_x)
-    
-    # Step 3: conditional variance (scalar)
-    var_cond = cov[1, 1] - (cov[1, 0]**2) / cov[0, 0]
-    sigma_cond = np.sqrt(var_cond)
-    
-    # Step 4: sample y (vectorized)
-    y = np.random.normal(mu_cond, sigma_cond, size=size)
-    
-    return np.column_stack((x, y))
+def split_dataset(dataset, train_frac=0.7, val_frac=0.2):
+    unique_indices = np.unique(dataset.sim_indices)
+    all_indices = np.array(dataset.sim_indices)
 
-def get_param_values(nsamples):
-    Mc_array = 10**np.random.uniform(LOG_MASS_MIN, LOG_MASS_MAX, size=nsamples)
-    q_array = np.random.uniform(Q_MIN, Q_MAX, size=nsamples)
+    rng = np.random.default_rng(42)
+    rng.shuffle(unique_indices)
 
-    m1_array = Mc_array * ((1 + q_array)**(1/5) / q_array**(3/5))
-    m2_array = m1_array * q_array
-    spin1_array = np.random.uniform(SPIN_MIN, SPIN_MAX, size=nsamples)
-    spin2_array = spin1_array * np.random.choice([-1, 1], size=nsamples)
-    d_array = 10**np.random.uniform(LOG_D_MIN, LOG_D_MAX, size=nsamples)
-    gw_beta_array = np.random.uniform(-np.pi/2, np.pi/2, size=nsamples)
-    gw_lambda_array = np.random.uniform(0, 2*np.pi, size=nsamples)
+    n_total = len(unique_indices)
+    n_train = int(train_frac * n_total)
+    n_val   = int(val_frac * n_total)
 
-    params = np.loadtxt(lpf_ord_param_path, skiprows=1)
-    lpf_betas, lpf_levels = params[:, 0], np.abs(params[:, 1])
-    lpf_levels = lpf_levels[lpf_betas > BETA_MIN]
-    lpf_betas = lpf_betas[lpf_betas > BETA_MIN]
-    lpf_betas = lpf_betas[(lpf_levels > AMP_MIN) & (lpf_levels < AMP_MAX)]
-    lpf_levels = lpf_levels[(lpf_levels > AMP_MIN) & (lpf_levels < AMP_MAX)]
-    params = np.vstack((np.log10(lpf_betas), np.log10(lpf_levels))).T
-    mu = np.mean(params, axis=0)
-    cov = np.cov(params, rowvar=False)
-    samples = truncated_2d_gaussian(mu, cov, xmin=np.log10(BETA_MIN), size=nsamples)
-    
-    beta_array = 10**samples[:,0]
-    amp_array  = 10**samples[:,1]
-    inj_point_array = np.random.choice(INJ_POINTS, nsamples)
+    train_sources = unique_indices[:n_train]
+    val_sources   = unique_indices[n_train:n_train+n_val]
+    test_sources  = unique_indices[n_train+n_val:]
 
-    sep_array = np.random.uniform(SEP_MIN, SEP_MAX, nsamples)
-    t0_array = ORB_TO + np.random.uniform(0.01, 0.99, size=nsamples)*ORB_SIZE*ORB_DT
+    train_indices = np.where(np.isin(all_indices, train_sources))[0]
+    val_indices   = np.where(np.isin(all_indices, val_sources))[0]
+    test_indices  = np.where(np.isin(all_indices, test_sources))[0]
 
-    return m1_array, m2_array, d_array,\
-          spin1_array, spin2_array, gw_beta_array, gw_lambda_array,\
-            amp_array, beta_array, inj_point_array, sep_array, t0_array
+    train_dataset = Subset(dataset, train_indices)
+    val_dataset   = Subset(dataset, val_indices)
+    test_dataset  = Subset(dataset, test_indices)
+
+def evaluate_model(model, dataset):
+    loader = DataLoader(dataset, batch_size=64)
+
+    all_preds = []
+    all_labels = []
+
+    with torch.no_grad():
+        for batch in loader:
+            images = batch[0].to(DEVICE)
+            labels = batch[1].to(DEVICE)
+
+            outputs = model(images)
+            probs = torch.sigmoid(outputs)
+            preds = (probs > 0.5).float()
+
+            all_preds.append(preds.cpu())
+            all_labels.append(labels.cpu())
+
+    preds = torch.cat(all_preds)
+    labels = torch.cat(all_labels)
+
+    pred_class = preds[:,0]*1 + preds[:,1]*2
+    true_class = labels[:,0]*1 + labels[:,1]*2
+    return pred_class.numpy(), true_class.numpy()
+
+def get_param_values(model):
+    dataset = LISADataset(DATASET_PATH)
+    _, _, test_dataset = split_dataset(dataset)
+
+    pred_class, true_class = evaluate_model(model, test_dataset)
+    print('Evaluation complete...')
+
+    correct = np.where((true_class == 3) & (pred_class == 3))[0]
+    sim_indices = np.array([test_dataset[i][2] for i in correct])
+    sim_indices = np.unique(sim_indices)
 
 def main():
     start = time.time()
 
     m1_array, m2_array, d_array, spin1_array, spin2_array, gw_beta_array, gw_lambda_array,\
-         amp_array, beta_array, inj_point_array, sep_array, t0_array = get_param_values(NSAMPLES)
+         amp_array, beta_array, inj_point_array, sep_array, t0_array = get_param_values()
 
     jobs = [(m1_array[i], m2_array[i], d_array[i], 
              spin1_array[i], spin2_array[i], 
              gw_beta_array[i], gw_lambda_array[i],
              amp_array[i], beta_array[i], inj_point_array[i],
-             sep_array[i], t0_array[i], PIPE) for i in range(NSAMPLES)]
+             sep_array[i], t0_array[i], PIPE) for i in range(len(m1_array))]
 
-    #if os.path.exists(mixed_dataset_path):
-     #   os.remove(mixed_dataset_path)
-    
-    h5file = create_mixed_dataset(FILE_PATH, PIPE['size'])
+    if os.path.exists(MIXED_SIM_INFERENCE_PATH):
+        os.remove(MIXED_SIM_INFERENCE_PATH)
+
+    h5file = create_mixed_dataset(MIXED_SIM_INFERENCE_PATH, PIPE['size'])
 
     print(f"Running with {N_WORKERS} workers")
 
@@ -208,7 +218,7 @@ def main():
                 append_mixed_sample(h5file, tdi_dict, m1, m2, d, spin1, spin2, gw_beta, gw_lambda,
                                     amp, beta, inj_point, sep, t0)
 
-    #sort_mixed_dataset(h5file)
+    sort_mixed_dataset(h5file)
     h5file.close()
 
     end = time.time()

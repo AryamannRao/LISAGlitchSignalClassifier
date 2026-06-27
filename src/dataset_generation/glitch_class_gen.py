@@ -40,7 +40,7 @@ with h5py.File(orbits_path, 'r') as orb:
     ORB_SIZE = orb.attrs['size']
     ORB_DT = orb.attrs['dt']
 
-NSAMPLES = 667
+NSAMPLES = 333
 BETA_MIN = 1
 AMP_MIN, AMP_MAX = 1e-16, 1e-10
 INJ_POINTS = ['tm_12', 'tm_23', 'tm_13',
@@ -141,8 +141,8 @@ def main():
     jobs = [(amp_array[i], beta_array[i], inj_point_array[i], t0_array[i], PIPE) for i in range(NSAMPLES)]
     
     # Create dataset
-    if os.path.exists(glitch_dataset_path):
-        os.remove(glitch_dataset_path)
+    #if os.path.exists(glitch_dataset_path):
+     #   os.remove(glitch_dataset_path)
 
     h5file = create_glitch_dataset(glitch_dataset_path, PIPE['size'])
 

@@ -16,7 +16,9 @@ GW_DATASETS = TRAINING_DATASETS / 'gw_datasets'
 GLITCH_DATASETS = TRAINING_DATASETS / 'glitch_datasets'
 MIXED_DATASETS = TRAINING_DATASETS / 'mixed_datasets'
 EMPTY_DATASETS = TRAINING_DATASETS / 'empty_datasets'
+
 LPF_DATASETS = INFERENCE_DATASETS / 'lpf_datasets'
+SEP_DATASETS = INFERENCE_DATASETS / 'sep_datasets'
 
 orbits_path = str(DIST/ 'orbits' / 'orbits.h5')
 simulation_path = str(DIST / 'default_simulation_output.h5')
@@ -55,6 +57,10 @@ model_lm_weights_path = str(DIST / 'model_weights' / 'low_mass'/ 'weights.pth')
 model_hm_weights_path = str(DIST / 'model_weights' / 'high_mass'/ 'weights.pth')
 model_ehm_weights_path = str(DIST / 'model_weights' / 'ext_high_mass'/ 'weights.pth')
 
+sep_lm_dataset_path = str(SEP_DATASETS / 'sep_lm_dataset.h5')
+sep_hm_dataset_path = str(SEP_DATASETS / 'sep_hm_dataset.h5')
+sep_ehm_dataset_path = str(SEP_DATASETS / 'sep_ehm_dataset.h5')
+
 with h5py.File(orbits_path, 'r') as orb:
     orb_t0 = orb.attrs['t0']
     orb_size = orb.attrs['size']
@@ -74,4 +80,4 @@ MODEL_PARAM_DICT = {'ext_high_mass':{'width': 6, 'bn': True, 'normalise': False,
                             'batch_size': 64, 'plot_every': 33},
                 'low_mass':{'width': 4, 'bn': True, 'normalise': False,
                             'drop': 0.0, 'num_epochs': 4, 'learning_rate': 0.001,
-                            'batch_size': 64, 'plot_every': 22}}
+                            'batch_size': 64, 'plot_every': 33}}

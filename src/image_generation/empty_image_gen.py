@@ -21,7 +21,7 @@ from helpers.config import *
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from tqdm import tqdm
 
-MASS_CATEGORY = 'high_mass'  # 'low_mass', 'high_mass', 'ext_high_mass'
+MASS_CATEGORY = 'low_mass'  # 'low_mass', 'high_mass', 'ext_high_mass'
 SPEC = SPECS[MASS_CATEGORY]
 
 if MASS_CATEGORY == 'low_mass':
@@ -40,7 +40,8 @@ def run_one_sample(args):
     X, Y, Z = args
     tdi_dict = make_tdi_dict(X, Y, Z)
     
-    tcen_arr = np.linspace(-2, 2, TIME_STEP)*3600
+    #tcen_arr = np.linspace(-2, 2, TIME_STEP)*3600
+    tcen_arr = np.random.uniform(-3, 3, size=TIME_STEP)*3600
     
     images = np.zeros((len(tcen_arr), RESOLUTION, RESOLUTION, 3))
     t_axes = np.zeros((len(tcen_arr), RESOLUTION))

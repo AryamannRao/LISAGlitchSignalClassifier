@@ -1,10 +1,3 @@
-"""
-Filename: gw_shapes.py
-Author: William Mostrenko
-Created: 2025-08-07
-Description: Classes for gravitational wave shapes.
-"""
-
 import numpy as np
 from scipy.optimize import fsolve
 from scipy.interpolate import interp1d
@@ -80,6 +73,6 @@ class BinaryInspiralGW(ResponseFromStrain):
         sigslice = h[mask1]
         tslice = h.sample_times[mask1]
         tslice = tslice + t[0]
-        f = interp1d(tslice, sigslice, 
+        f = interp1d(tslice, sigslice, kind='cubic',
                          bounds_error=False, fill_value=0)
         return f(t)

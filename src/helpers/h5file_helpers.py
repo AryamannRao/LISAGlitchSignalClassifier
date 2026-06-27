@@ -130,19 +130,22 @@ def sort_gw_dataset(h5):
     hm = (chirp_masses >= 1e5) & (chirp_masses < 1e6)
     ehm = chirp_masses >= 1e6
 
-    h5_lm = create_gw_dataset(gw_lm_dataset_path, h5["X"].shape[1])
-    h5_hm = create_gw_dataset(gw_hm_dataset_path, h5["X"].shape[1])
-    h5_ehm = create_gw_dataset(gw_ehm_dataset_path, h5["X"].shape[1])
-
-    tdi_dict_lm = {"X": h5["X"][lm], "Y": h5["Y"][lm], "Z": h5["Z"][lm]}
-    tdi_dict_hm = {"X": h5["X"][hm], "Y": h5["Y"][hm], "Z": h5["Z"][hm]}
-    tdi_dict_ehm = {"X": h5["X"][ehm], "Y": h5["Y"][ehm], "Z": h5["Z"][ehm]}
-
-    append_gw_sample(h5_lm, tdi_dict_lm, h5["m1"][lm], h5["m2"][lm], h5["d"][lm],
+    if np.sum(lm) > 0:
+        h5_lm = create_gw_dataset(gw_lm_dataset_path, h5["X"].shape[1])
+        tdi_dict_lm = {"X": h5["X"][lm], "Y": h5["Y"][lm], "Z": h5["Z"][lm]}
+        append_gw_sample(h5_lm, tdi_dict_lm, h5["m1"][lm], h5["m2"][lm], h5["d"][lm],
                      h5["spin1"][lm], h5["spin2"][lm], h5["gw_beta"][lm], h5["gw_lambda"][lm], h5["t0"][lm])
-    append_gw_sample(h5_hm, tdi_dict_hm, h5["m1"][hm], h5["m2"][hm], h5["d"][hm],
+
+    if np.sum(hm) > 0:
+        h5_hm = create_gw_dataset(gw_hm_dataset_path, h5["X"].shape[1])
+        tdi_dict_hm = {"X": h5["X"][hm], "Y": h5["Y"][hm], "Z": h5["Z"][hm]}
+        append_gw_sample(h5_hm, tdi_dict_hm, h5["m1"][hm], h5["m2"][hm], h5["d"][hm],
                      h5["spin1"][hm], h5["spin2"][hm], h5["gw_beta"][hm], h5["gw_lambda"][hm], h5["t0"][hm])
-    append_gw_sample(h5_ehm, tdi_dict_ehm, h5["m1"][ehm], h5["m2"][ehm], h5["d"][ehm],
+   
+    if np.sum(ehm) > 0:
+        h5_ehm = create_gw_dataset(gw_ehm_dataset_path, h5["X"].shape[1])
+        tdi_dict_ehm = {"X": h5["X"][ehm], "Y": h5["Y"][ehm], "Z": h5["Z"][ehm]}
+        append_gw_sample(h5_ehm, tdi_dict_ehm, h5["m1"][ehm], h5["m2"][ehm], h5["d"][ehm],
                      h5["spin1"][ehm], h5["spin2"][ehm], h5["gw_beta"][ehm], h5["gw_lambda"][ehm], h5["t0"][ehm])
     
 def create_glitch_dataset(dataset_path, siglen):
@@ -398,21 +401,24 @@ def sort_mixed_dataset(h5):
     hm = (chirp_masses >= 1e5) & (chirp_masses < 1e6)
     ehm = chirp_masses >= 1e6
 
-    h5_lm = create_mixed_dataset(mixed_lm_dataset_path, h5["X"].shape[1])
-    h5_hm = create_mixed_dataset(mixed_hm_dataset_path, h5["X"].shape[1])
-    h5_ehm = create_mixed_dataset(mixed_ehm_dataset_path, h5["X"].shape[1])
-
-    tdi_dict_lm = {"X": h5["X"][lm], "Y": h5["Y"][lm], "Z": h5["Z"][lm]}
-    tdi_dict_hm = {"X": h5["X"][hm], "Y": h5["Y"][hm], "Z": h5["Z"][hm]}
-    tdi_dict_ehm = {"X": h5["X"][ehm], "Y": h5["Y"][ehm], "Z": h5["Z"][ehm]}
-
-    append_mixed_sample(h5_lm, tdi_dict_lm, h5["m1"][lm], h5["m2"][lm], h5["d"][lm],
+    if np.sum(lm) > 0:
+        h5_lm = create_mixed_dataset(mixed_lm_dataset_path, h5["X"].shape[1])
+        tdi_dict_lm = {"X": h5["X"][lm], "Y": h5["Y"][lm], "Z": h5["Z"][lm]}
+        append_mixed_sample(h5_lm, tdi_dict_lm, h5["m1"][lm], h5["m2"][lm], h5["d"][lm],
                      h5["spin1"][lm], h5["spin2"][lm], h5["gw_beta"][lm], h5["gw_lambda"][lm],
                      h5["amp"][lm], h5["beta"][lm], h5["inj_point"][lm], h5["sep"][lm], h5["t0"][lm])
-    append_mixed_sample(h5_hm, tdi_dict_hm, h5["m1"][hm], h5["m2"][hm], h5["d"][hm],
+
+    if np.sum(hm) > 0:
+        h5_hm = create_mixed_dataset(mixed_hm_dataset_path, h5["X"].shape[1])
+        tdi_dict_hm = {"X": h5["X"][hm], "Y": h5["Y"][hm], "Z": h5["Z"][hm]}
+        append_mixed_sample(h5_hm, tdi_dict_hm, h5["m1"][hm], h5["m2"][hm], h5["d"][hm],
                      h5["spin1"][hm], h5["spin2"][hm], h5["gw_beta"][hm], h5["gw_lambda"][hm],
                      h5["amp"][hm], h5["beta"][hm], h5["inj_point"][hm], h5["sep"][hm], h5["t0"][hm])
-    append_mixed_sample(h5_ehm, tdi_dict_ehm, h5["m1"][ehm], h5["m2"][ehm], h5["d"][ehm],
+    
+    if np.sum(ehm) > 0:
+        h5_ehm = create_mixed_dataset(mixed_ehm_dataset_path, h5["X"].shape[1])
+        tdi_dict_ehm = {"X": h5["X"][ehm], "Y": h5["Y"][ehm], "Z": h5["Z"][ehm]}
+        append_mixed_sample(h5_ehm, tdi_dict_ehm, h5["m1"][ehm], h5["m2"][ehm], h5["d"][ehm],
                      h5["spin1"][ehm], h5["spin2"][ehm], h5["gw_beta"][ehm], h5["gw_lambda"][ehm],
                      h5["amp"][ehm], h5["beta"][ehm], h5["inj_point"][ehm], h5["sep"][ehm], h5["t0"][ehm])
 

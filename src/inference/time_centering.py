@@ -29,7 +29,7 @@ from tqdm import tqdm
 RESOLUTION = 256
 N_WORKERS, CHUNKSIZE = 6, 2
 TIME_STEP = 20
-MASS_CATEGORY = 'low_mass'  # 'low_mass', 'high_mass', 'ext_high_mass'
+MASS_CATEGORY = 'high_mass'  # 'low_mass', 'high_mass', 'ext_high_mass'
 
 DEVICE = torch.device('mps')
 TRANSIENT_NAMES = {1: 'gw', 2: 'glitch', 3: 'mixed'}
@@ -48,10 +48,10 @@ if MASS_CATEGORY == 'low_mass':
     WEIGHTS_PATH = model_lm_weights_path
 elif MASS_CATEGORY == 'high_mass':
     DATASET_PATH = training_hm_dataset_path
-    WEIGHTS_PATH = model_hm_weights_path
+    WEIGHTS_PATH = TRAINING_RESULTS/ 'high_mass'/ 'good_runs' /'run_230626_000227'/'best_model_weights.pth'
 elif MASS_CATEGORY == 'ext_high_mass':
     DATASET_PATH = training_ehm_dataset_path
-    WEIGHTS_PATH = model_ehm_weights_path
+    WEIGHTS_PATH = TRAINING_RESULTS/ 'ext_high_mass'/ 'good_runs' /'run_210626_163120'/'best_model_weights.pth'
 
 def split_dataset(dataset, train_frac=0.7, val_frac=0.2):
     unique_indices = np.unique(dataset.sim_indices)
@@ -114,7 +114,7 @@ def run_one_sample(args):
     X, Y, Z = args
     tdi_dict = make_tdi_dict(X, Y, Z)
     
-    tcen_arr = np.linspace(-2, 2, TIME_STEP)*3600
+    tcen_arr = np.linspace(-3, 3, TIME_STEP)*3600
     
     images = np.zeros((len(tcen_arr), RESOLUTION, RESOLUTION, 3))
     t_axes = np.zeros((len(tcen_arr), RESOLUTION))
@@ -206,7 +206,7 @@ def run_inference(model):
         glitches = f['QT'][:]
         tcen_vals = f['tcen'][:]
 
-    gw_acc, glitch_acc = [], []
+    gw_acc, glitch_acc, gw_std, glitch_std = [], [], [], []
     with torch.no_grad():
         for i in range(TIME_STEP):
             gw_images = torch.tensor(gws[:, i, :, :, :],\
@@ -222,8 +222,11 @@ def run_inference(model):
 
             gw_acc.append(np.mean(gw_probs.to('cpu').numpy(), axis=0))
             glitch_acc.append(np.mean(glitch_probs.to('cpu').numpy(), axis=0))
-    
-    return tcen_vals[0,:], gw_acc, glitch_acc
+
+            gw_std.append(np.std(gw_probs.to('cpu').numpy(), axis=0))
+            glitch_std.append(np.std(glitch_probs.to('cpu').numpy(), axis=0))
+
+    return tcen_vals[0,:], gw_acc, glitch_acc, gw_std, glitch_std
 
 def main():
     model = load_best_model(WEIGHTS_PATH, MODEL_PARAMS)
@@ -240,8 +243,9 @@ def main():
     
     if os.path.exists(gw_inference_path) and os.path.exists(glitch_inference_path):
         print("Running inference...")
-        times, gw_acc, glitch_acc = run_inference(model)
-        np.savez(SAVE_DIR / 'inference_results.npz', times=times, gw_acc=gw_acc, glitch_acc=glitch_acc)
+        times, gw_acc, glitch_acc, gw_std, glitch_std = run_inference(model)
+        np.savez(SAVE_DIR / 'inference_results.npz', times=times, gw_acc=gw_acc,\
+                  glitch_acc=glitch_acc, gw_std=gw_std, glitch_std=glitch_std)
 
 
 if __name__ == "__main__":

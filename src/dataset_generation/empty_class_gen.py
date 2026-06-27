@@ -39,7 +39,7 @@ with h5py.File(orbits_path, 'r') as orb:
     ORB_SIZE = orb.attrs['size']
     ORB_DT = orb.attrs['dt']
 
-NSAMPLES = 667
+NSAMPLES = 333
 N_WORKERS, CHUNKSIZE = 6, 2
 
 def run_one_sample(args):
@@ -84,8 +84,8 @@ def main():
     t0_array = ORB_TO + np.random.uniform(0.01, 0.99, size=NSAMPLES)*ORB_SIZE*ORB_DT
     jobs = [(t0, PIPE) for t0 in t0_array]
     
-    if os.path.exists(empty_dataset_path):
-        os.remove(empty_dataset_path)
+    #if os.path.exists(empty_dataset_path):
+     #   os.remove(empty_dataset_path)
 
     h5file = create_empty_dataset(empty_dataset_path, PIPE['size'])
 

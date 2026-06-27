@@ -21,6 +21,7 @@ MASS_CATEGORY = 'low_mass'  # 'low_mass', 'high_mass', 'ext_high_mass'
 
 if MASS_CATEGORY == 'low_mass':
     DATASET_PATH = training_lm_dataset_path
+    #DATASET_PATH = TRAINING_DATASETS / 'training_lm_dataset2.h5'
 elif MASS_CATEGORY == 'high_mass':
     DATASET_PATH = training_hm_dataset_path
 elif MASS_CATEGORY == 'ext_high_mass':
@@ -48,7 +49,7 @@ def split_dataset(dataset, train_frac=0.7, val_frac=0.2):
     unique_indices = np.unique(dataset.sim_indices)
     all_indices = np.array(dataset.sim_indices)
 
-    rng = np.random.default_rng(42)
+    rng = np.random.default_rng(67)
     rng.shuffle(unique_indices)
 
     n_total = len(unique_indices)
@@ -108,7 +109,7 @@ def train_model(model, train_data, val_data, test_data,
     train_loader = DataLoader(train_data, batch_size=batch_size, shuffle=True)
     
     subset_size = 500
-    rng = np.random.default_rng(42)
+    rng = np.random.default_rng(67)
     indices = rng.choice(len(val_data), subset_size, replace=False)
 
     val_subset = Subset(val_data, indices)
@@ -185,7 +186,7 @@ def plot_results(results):
     plt.savefig(SAVE_DIR / 'training_curves.png')
 
 def main():
-    set_seed(42)
+    set_seed(67)
 
     model = CNN(width=WIDTH, bn=USE_BATCH_NORM, normalise=NORMALISE, drop=DROP)
     dataset = LISADataset(DATASET_PATH)
