@@ -17,15 +17,15 @@ from torch.utils.data import random_split, DataLoader, Subset
 from model import CNN, LISADataset
 from helpers.config import *
 
-MASS_CATEGORY = 'low_mass'  # 'low_mass', 'high_mass', 'ext_high_mass'
+MASS_CATEGORY = 'ext_high_mass'  # 'low_mass', 'high_mass', 'ext_high_mass'
 
 if MASS_CATEGORY == 'low_mass':
     DATASET_PATH = training_lm_dataset_path
-    #DATASET_PATH = TRAINING_DATASETS / 'training_lm_dataset2.h5'
 elif MASS_CATEGORY == 'high_mass':
     DATASET_PATH = training_hm_dataset_path
 elif MASS_CATEGORY == 'ext_high_mass':
     DATASET_PATH = training_ehm_dataset_path
+    #DATASET_PATH = TRAINING_DATASETS / 'training_ehm_dataset2.h5'
 
 SAVE_DIR = TRAINING_RESULTS / MASS_CATEGORY /f'run_{datetime.now().strftime("%d%m%y_%H%M%S")}'
 MODEL_PARAMS = MODEL_PARAM_DICT[MASS_CATEGORY]
@@ -40,8 +40,10 @@ DROP = MODEL_PARAMS['drop']
 PLOT_EVERY = MODEL_PARAMS['plot_every']
 
 DEVICE = torch.device('mps')
+NUMPY_SEED = 42
+DATASET_SEED = 42
 
-def set_seed(seed=42):
+def set_seed(seed):
     torch.manual_seed(seed)
     np.random.seed(seed)
 
@@ -49,7 +51,7 @@ def split_dataset(dataset, train_frac=0.7, val_frac=0.2):
     unique_indices = np.unique(dataset.sim_indices)
     all_indices = np.array(dataset.sim_indices)
 
-    rng = np.random.default_rng(67)
+    rng = np.random.default_rng(DATASET_SEED)
     rng.shuffle(unique_indices)
 
     n_total = len(unique_indices)
@@ -109,7 +111,7 @@ def train_model(model, train_data, val_data, test_data,
     train_loader = DataLoader(train_data, batch_size=batch_size, shuffle=True)
     
     subset_size = 500
-    rng = np.random.default_rng(67)
+    rng = np.random.default_rng(DATASET_SEED)
     indices = rng.choice(len(val_data), subset_size, replace=False)
 
     val_subset = Subset(val_data, indices)
@@ -174,7 +176,8 @@ def plot_results(results):
     f"Training curve (batch size={BATCH_SIZE}, learning rate={LEARNING_RATE}, num epochs={NUM_EPOCHS})\n" +\
     f"Final Valid Soft Acc: {val_soft_acc:.3f}, Final Valid Hard Acc: {val_hard_acc:.3f},\n" +\
     f"Test Soft Acc: {test_soft_acc:.3f}, Test Hard Acc: {test_hard_acc:.3f}, \n" +\
-    f"Final Train loss {train_loss[-1]:.3f}, Final Val loss {valid_loss[-1]:.3f}"
+    f"Final Train loss {train_loss[-1]:.3f}, Final Val loss {valid_loss[-1]:.3f}, \n" +\
+    f"Dataset splitting seed used: {DATASET_SEED}, Numpy seed used: {NUMPY_SEED}"
     fig.suptitle(title, fontsize=12)
 
     axes.plot(iters[:len(train_loss)], train_loss, label='Train loss')
@@ -186,7 +189,7 @@ def plot_results(results):
     plt.savefig(SAVE_DIR / 'training_curves.png')
 
 def main():
-    set_seed(67)
+    set_seed(NUMPY_SEED)
 
     model = CNN(width=WIDTH, bn=USE_BATCH_NORM, normalise=NORMALISE, drop=DROP)
     dataset = LISADataset(DATASET_PATH)

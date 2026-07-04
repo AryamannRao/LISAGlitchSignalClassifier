@@ -40,7 +40,7 @@ with h5py.File(orbits_path, 'r') as orb:
     ORB_SIZE = orb.attrs['size']
     ORB_DT = orb.attrs['dt']
 
-NSAMPLES = 333
+NSAMPLES = 1000
 BETA_MIN = 1
 AMP_MIN, AMP_MAX = 1e-16, 1e-10
 INJ_POINTS = ['tm_12', 'tm_23', 'tm_13',
@@ -111,7 +111,7 @@ def truncated_2d_gaussian(mu, cov, xmin, size):
     return np.column_stack((x, y))
 
 def get_param_values(nsamples):
-    params = np.loadtxt(lpf_ord_param_path, skiprows=1)
+    """params = np.loadtxt(lpf_ord_param_path, skiprows=1)
 
     lpf_betas, lpf_levels = params[:, 0], np.abs(params[:, 1])
     lpf_levels = lpf_levels[lpf_betas > BETA_MIN]
@@ -124,10 +124,10 @@ def get_param_values(nsamples):
 
     mu = np.mean(params, axis=0)
     cov = np.cov(params, rowvar=False)
-    samples = truncated_2d_gaussian(mu, cov, xmin=np.log10(BETA_MIN), size=nsamples)
+    samples = truncated_2d_gaussian(mu, cov, xmin=np.log10(BETA_MIN), size=nsamples)"""
     
-    beta_array = 10**samples[:,0]
-    amp_array  = 10**samples[:,1]
+    beta_array = 10**np.random.uniform(0, np.log10(5e3), size=nsamples)
+    amp_array  = 10**np.random.uniform(-14, -11, size=nsamples)
     inj_point_array = np.random.choice(INJ_POINTS, nsamples)
     t0_array = ORB_TO + np.random.uniform(0.01, 0.99, size=nsamples)*ORB_SIZE*ORB_DT
 

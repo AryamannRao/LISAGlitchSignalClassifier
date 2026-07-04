@@ -40,7 +40,7 @@ with h5py.File(orbits_path, 'r') as orb:
     ORB_DT = orb.attrs['dt']
 
 NSAMPLES = 1000
-MASS_CATEGORY = 'low_mass'
+MASS_CATEGORY = 'ext_high_mass'
 
 if MASS_CATEGORY == 'low_mass':
     FILE_PATH = gw_lm_dataset_path
@@ -54,17 +54,17 @@ elif MASS_CATEGORY == 'ext_high_mass':
 
 Q_MIN, Q_MAX = 1, 5
 LOG_D_MIN, LOG_D_MAX = 3, 5
-SPIN_MIN, SPIN_MAX = 0, 0.99
+SPIN_MIN, SPIN_MAX = -0.99, 0.99
 
 N_WORKERS, CHUNKSIZE = 6, 2
 
 def run_one_sample(args):
-    m1, m2, d, spin1, spin2, gw_beta, gw_lambda, t0, pipe = args
+    m1, m2, d, spin1, spin2, iota, gw_beta, gw_lambda, t0, pipe = args
 
     pipe['t0'] = t0
     gws = [{'type': 'BinaryInspiralGW',
         'm1': m1, 'm2': m2, 'd': d,
-        'spin1': spin1, 'spin2': spin2,
+        'spin1': spin1, 'spin2': spin2, 'iota':iota,
         'gw_beta': gw_beta, 'gw_lambda': gw_lambda,
         't_inj': pipe['t_inj'], 'domain': 'freq'}]
 
@@ -87,7 +87,7 @@ def run_one_sample(args):
     os.remove(local_sim_path)
     os.remove(local_gw_path)
 
-    return tdi_dict, m1, m2, d, spin1, spin2, gw_beta, gw_lambda, t0
+    return tdi_dict, m1, m2, d, spin1, spin2, iota, gw_beta, gw_lambda, t0
 
 def run_chunk(job_chunk):
     results = []
@@ -111,23 +111,24 @@ def get_param_values(nsamples):
     m2_array = m1_array * q_array
 
     spin1_array = np.random.uniform(SPIN_MIN, SPIN_MAX, size=nsamples)
-    spin2_array = spin1_array * np.random.choice([-1, 1], size=nsamples)
+    spin2_array = np.random.uniform(SPIN_MIN, SPIN_MAX, size=nsamples)
+    iota_array = np.arccos(np.random.uniform(-1, 1, size=nsamples))
 
     d_array = 10**np.random.uniform(LOG_D_MIN, LOG_D_MAX, size=nsamples)
-    gw_beta_array = np.random.uniform(-np.pi/2, np.pi/2, size=nsamples)
+    gw_beta_array = np.arcsin(np.random.uniform(-1, 1, size=nsamples))
     gw_lambda_array = np.random.uniform(0, 2*np.pi, size=nsamples)
     t0_array = ORB_TO + np.random.uniform(0.01, 0.99, size=nsamples)*ORB_SIZE*ORB_DT
 
-    return m1_array, m2_array, d_array, spin1_array, spin2_array, gw_beta_array, gw_lambda_array, t0_array
+    return m1_array, m2_array, d_array, spin1_array, spin2_array, iota_array, gw_beta_array, gw_lambda_array, t0_array
 
 def main():
     start = time.time()
 
-    m1_array, m2_array, d_array, spin1_array, spin2_array,\
+    m1_array, m2_array, d_array, spin1_array, spin2_array, iota_array,\
         gw_beta_array, gw_lambda_array, t0_array = get_param_values(NSAMPLES)
 
     jobs = [(m1_array[i], m2_array[i], d_array[i], 
-             spin1_array[i], spin2_array[i], 
+             spin1_array[i], spin2_array[i], iota_array[i],
              gw_beta_array[i], gw_lambda_array[i], t0_array[i], PIPE) for i in range(NSAMPLES)]
 
     #if os.path.exists(FILE_PATH):
@@ -152,8 +153,8 @@ def main():
             completed_samples += len(results)
             tqdm.write(f"Samples done: {completed_samples}/{total_samples}")
             
-            for tdi_dict, m1, m2, d, spin1, spin2, gw_beta, gw_lambda, t0 in results:
-                append_gw_sample(h5file, tdi_dict, m1, m2, d, spin1, spin2, gw_beta, gw_lambda, t0)
+            for tdi_dict, m1, m2, d, spin1, spin2, iota, gw_beta, gw_lambda, t0 in results:
+                append_gw_sample(h5file, tdi_dict, m1, m2, d, spin1, spin2, iota, gw_beta, gw_lambda, t0)
 
     #sort_gw_dataset(h5file)
     h5file.close()

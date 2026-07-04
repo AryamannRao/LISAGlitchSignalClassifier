@@ -10,7 +10,8 @@ warnings.filterwarnings("ignore")
 class BinaryInspiralGW(ResponseFromStrain):
     """Represents a GW resulting from a binary merger.
     """
-    def __init__(self, m1, m2, d, t_inj, spin1=0.0, spin2=0.0, domain='freq', **kwargs,) -> None:
+    def __init__(self, m1, m2, d, t_inj, spin1=0.0, spin2=0.0, iota=0.0,
+                 domain='freq', **kwargs,) -> None:
         super().__init__(**kwargs)
         self.t_inj = float(t_inj)
         self.m1 = float(m1)
@@ -18,21 +19,22 @@ class BinaryInspiralGW(ResponseFromStrain):
         self.d = float(d)
         self.spin1 = float(spin1)
         self.spin2 = float(spin2)
+        self.iota = float(iota)
         self.domain = domain
         self.f_lower = self.compute_flower()
 
         if self.domain == 'time':
             hp_td, hc_td = get_td_waveform(approximant="IMRPhenomXHM",
                 mass1=self.m1, mass2=self.m2, delta_t=1e-3/self.f_lower, f_lower=self.f_lower, 
-                                           distance=self.d, spin1z = self.spin1, spin2z = self.spin2)
+                inclination=self.iota, distance=self.d, spin1z = self.spin1, spin2z = self.spin2)
             self.hp = hp_td
             self.hc = hc_td
             
         elif self.domain == 'freq':
             hp_fd, hc_fd = get_fd_waveform(approximant="IMRPhenomXHM",
-                                       mass1=self.m1, mass2=self.m2, delta_f=self.f_lower/1e3,
-                                       f_lower=self.f_lower, distance=self.d, 
-                                           spin1z = self.spin1, spin2z = self.spin2)
+                        mass1=self.m1, mass2=self.m2, delta_f=self.f_lower/1e3,
+                        f_lower=self.f_lower, distance=self.d, inclination=self.iota,
+                        spin1z = self.spin1, spin2z = self.spin2)
             self.hp = hp_fd.to_timeseries()
             self.hc = hc_fd.to_timeseries()
         self.amp_hp = max(self.hp)

@@ -73,8 +73,8 @@ SPECS = {'low_mass': {'trange':(-3, 3), 'frange':(1e-3, 1e-1), 'Q':30},
          'ext_high_mass': {'trange':(-3, 3), 'frange':(1e-4, 1e-2), 'Q':6}}
 
 MODEL_PARAM_DICT = {'ext_high_mass':{'width': 6, 'bn': True, 'normalise': False,
-                                'drop': 0.0, 'num_epochs': 9, 'learning_rate': 0.001,
-                                'batch_size': 64, 'plot_every': 50},
+                                'drop': 0.0, 'num_epochs': 7, 'learning_rate': 0.001,
+                                'batch_size': 64, 'plot_every': 33},
                 'high_mass':{'width': 6, 'bn': True, 'normalise': False,
                             'drop': 0.0, 'num_epochs': 6, 'learning_rate': 0.001,
                             'batch_size': 64, 'plot_every': 33},
