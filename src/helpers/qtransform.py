@@ -69,9 +69,8 @@ def generate_qscan(tdi_dict, channel, pipe, event,
     
     time_secs = signal.times.value
     time_hrs = time_secs/3600
-    tevent = event['t_inj']
     
-    index = np.where((time_hrs <= tevent/3600 + trange[1]) & (time_hrs >= tevent/3600 + trange[0]))[0]
+    index = np.where((time_hrs <= event/3600 + trange[1]) & (time_hrs >= event/3600 + trange[0]))[0]
     sigslice = signal[index].value
     timeslice = signal[index].times.value
     

@@ -9,6 +9,9 @@ import numpy as np
 import time
 from pathlib import Path
 
+from astropy.cosmology import Planck18, z_at_value
+from astropy import units as u
+
 # Ensure src is on Python path regardless of where code is run from
 SRC_ROOT = Path(__file__).resolve().parent.parent
 if str(SRC_ROOT) not in sys.path:
@@ -53,8 +56,8 @@ elif MASS_CATEGORY == 'ext_high_mass':
     LOG_MASS_MIN, LOG_MASS_MAX = 6, 7
 
 Q_MIN, Q_MAX = 1, 5
-LOG_D_MIN, LOG_D_MAX = 3, 5
 SPIN_MIN, SPIN_MAX = -0.99, 0.99
+Z_MIN, Z_MAX = 0.5, 8
 
 N_WORKERS, CHUNKSIZE = 6, 2
 
@@ -80,7 +83,7 @@ def run_one_sample(args):
             gws, glitches, pipe,
             local_gw_path, local_glitch_path, orbits_path,
             local_sim_path,
-            disable_noise=pipe['keep_noises']
+            disable_noise=pipe['keep_noises'], seed=42
         )
         tdi_dict = run_tdi(local_sim_path, pipe)
 
@@ -104,20 +107,29 @@ def chunkify(lst, chunksize):
         yield lst[i:i + chunksize]
 
 def get_param_values(nsamples):
-    Mc_array = 10**np.random.uniform(LOG_MASS_MIN, LOG_MASS_MAX, size=nsamples)
+    Mt_array = 10**np.random.uniform(LOG_MASS_MIN, LOG_MASS_MAX, size=nsamples)
     q_array = np.random.uniform(Q_MIN, Q_MAX, size=nsamples)
 
-    m1_array = Mc_array * ((1 + q_array)**(1/5) / q_array**(3/5))
+    m1_array = Mt_array/(1+q_array)
     m2_array = m1_array * q_array
+
+    z_array = np.random.uniform(Z_MIN, Z_MAX, size=nsamples)
+    d_array = Planck18.luminosity_distance(z_array).value
 
     spin1_array = np.random.uniform(SPIN_MIN, SPIN_MAX, size=nsamples)
     spin2_array = np.random.uniform(SPIN_MIN, SPIN_MAX, size=nsamples)
     iota_array = np.arccos(np.random.uniform(-1, 1, size=nsamples))
 
-    d_array = 10**np.random.uniform(LOG_D_MIN, LOG_D_MAX, size=nsamples)
     gw_beta_array = np.arcsin(np.random.uniform(-1, 1, size=nsamples))
     gw_lambda_array = np.random.uniform(0, 2*np.pi, size=nsamples)
     t0_array = ORB_TO + np.random.uniform(0.01, 0.99, size=nsamples)*ORB_SIZE*ORB_DT
+
+    """d_array = 1e4*np.ones(nsamples)
+    spin1_array, spin2_array = np.zeros(nsamples), np.zeros(nsamples)
+    iota_array = np.zeros(nsamples)
+    gw_beta_array = np.zeros(nsamples)
+    gw_lambda_array = np.zeros(nsamples)
+    t0_array = ORB_TO + 0.5*np.ones(nsamples)*ORB_SIZE*ORB_DT"""
 
     return m1_array, m2_array, d_array, spin1_array, spin2_array, iota_array, gw_beta_array, gw_lambda_array, t0_array
 

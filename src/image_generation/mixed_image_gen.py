@@ -49,7 +49,7 @@ def run_one_sample(args):
     tcen_vals = np.zeros(len(tcen_arr))
 
     for i, tcen in enumerate(tcen_arr):
-        event = {'t_inj': PIPE['t_inj'] - tcen}
+        event = PIPE['t_inj'] - tcen
         QT = np.zeros((RESOLUTION, RESOLUTION, 3))
         for channel in ['A', 'E', 'T']:
             if REPRESENTATION == 'varqscan':

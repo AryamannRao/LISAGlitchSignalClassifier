@@ -19,6 +19,9 @@ from helpers.simulation import *
 from helpers.h5file_helpers import *
 from helpers.config import *
 
+from astropy.cosmology import Planck18, z_at_value
+from astropy import units as u
+
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from tqdm import tqdm
 
@@ -40,7 +43,7 @@ with h5py.File(orbits_path, 'r') as orb:
     ORB_SIZE = orb.attrs['size']
     ORB_DT = orb.attrs['dt']
 
-NSAMPLES = 100
+NSAMPLES = 1000
 MASS_CATEGORY = 'ext_high_mass'
 
 if MASS_CATEGORY == 'low_mass':
@@ -51,19 +54,18 @@ elif MASS_CATEGORY == 'high_mass':
     LOG_MASS_MIN, LOG_MASS_MAX = 5, 6
 elif MASS_CATEGORY == 'ext_high_mass':
     FILE_PATH = mixed_ehm_dataset_path
-    FILE_PATH = MIXED_DATASETS / 'mixed_gwbeta_way.h5'
     LOG_MASS_MIN, LOG_MASS_MAX = 6, 7
 
 Q_MIN, Q_MAX = 1, 5
-LOG_D_MIN, LOG_D_MAX = 3, 5
+Z_MIN, Z_MAX = 0.5, 8
 SPIN_MIN, SPIN_MAX = -0.99, 0.99
 
-BETA_MIN = 1
-AMP_MIN, AMP_MAX = 1e-16, 1e-10
+LOG_BETA_MIN, LOG_BETA_MAX = 0, np.log10(5e3)
+LOG_AMP_MIN, LOG_AMP_MAX = -13, -11
 INJ_POINTS = ['tm_12', 'tm_23', 'tm_13',
               'tm_21', 'tm_32', 'tm_31']
 
-SEP_MIN, SEP_MAX = -1.5, 1.5
+SEP_MIN, SEP_MAX = 0.25, 2.5
 
 N_WORKERS, CHUNKSIZE = 6, 2
 
@@ -142,22 +144,23 @@ def truncated_2d_gaussian(mu, cov, xmin, size):
     return np.column_stack((x, y))
 
 def get_param_values(nsamples):
-    Mc_array = 10**np.random.uniform(LOG_MASS_MIN, LOG_MASS_MAX, size=nsamples)
+    Mt_array = 10**np.random.uniform(LOG_MASS_MIN, LOG_MASS_MAX, size=nsamples)
     q_array = np.random.uniform(Q_MIN, Q_MAX, size=nsamples)
 
-    m1_array = Mc_array * ((1 + q_array)**(1/5) / q_array**(3/5))
+    m1_array = Mt_array/(1+q_array)
     m2_array = m1_array * q_array
-    spin1_array = np.random.uniform(0, 0.99, size=nsamples)
-    spin2_array = spin1_array * np.random.choice([-1, 1], size=nsamples)
-    d_array = 10**np.random.uniform(LOG_D_MIN, LOG_D_MAX, size=nsamples)
+
+    spin1_array = np.random.uniform(SPIN_MIN, SPIN_MAX, size=nsamples)
+    spin2_array = np.random.uniform(SPIN_MIN, SPIN_MAX, size=nsamples)
+
+    z_array = np.random.uniform(Z_MIN, Z_MAX, size=nsamples)
+    d_array = Planck18.luminosity_distance(z_array).value
 
     iota_array = np.arccos(np.random.uniform(-1, 1, size=nsamples))
     gw_beta_array = np.arcsin(np.random.uniform(-1, 1, size=nsamples))
-    #iota_array = np.zeros(shape=nsamples)
-    #gw_beta_array = np.random.uniform(-np.pi/2, np.pi/2, size=nsamples)
     gw_lambda_array = np.random.uniform(0, 2*np.pi, size=nsamples)
 
-    params = np.loadtxt(lpf_ord_param_path, skiprows=1)
+    """params = np.loadtxt(lpf_ord_param_path, skiprows=1)
     lpf_betas, lpf_levels = params[:, 0], np.abs(params[:, 1])
     lpf_levels = lpf_levels[lpf_betas > BETA_MIN]
     lpf_betas = lpf_betas[lpf_betas > BETA_MIN]
@@ -168,14 +171,15 @@ def get_param_values(nsamples):
     cov = np.cov(params, rowvar=False)
     samples = truncated_2d_gaussian(mu, cov, xmin=np.log10(BETA_MIN), size=nsamples)
     
-    beta_array = 10**samples[:,0]
-    amp_array  = 10**samples[:,1]
+    #beta_array = 10**samples[:,0]
+    #amp_array  = 10**samples[:,1]"""
 
-    #beta_array = 10**np.random.uniform(0, np.log10(5e3), size=nsamples)
-    #amp_array  = 10**np.random.uniform(-14, -11, size=nsamples)
+    beta_array = 10**np.random.uniform(LOG_BETA_MIN, LOG_BETA_MAX, size=nsamples)
+    amp_array  = 10**np.random.uniform(LOG_AMP_MIN, LOG_AMP_MAX, size=nsamples)
     inj_point_array = np.random.choice(INJ_POINTS, nsamples)
 
-    sep_array = np.random.uniform(SEP_MIN, SEP_MAX, nsamples)
+    #sep_array = np.random.uniform(SEP_MIN, SEP_MAX, nsamples)
+    sep_array = np.random.choice([-1, 1], size=nsamples)*np.random.uniform(SEP_MIN, SEP_MAX, size=nsamples)
     t0_array = ORB_TO + np.random.uniform(0.01, 0.99, size=nsamples)*ORB_SIZE*ORB_DT
 
     return m1_array, m2_array, d_array,\
