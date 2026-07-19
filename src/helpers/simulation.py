@@ -25,7 +25,7 @@ def create_gws(gws, pipe, gw_path, orbits_path):
         if gw['type'] == 'BinaryInspiralGW':
             gw = BinaryInspiralGW(m1=gw['m1'], m2=gw['m2'], d=gw['d'], t_inj=gw['t_inj'] + pipe['t0'],
                                   spin1 = gw['spin1'], spin2 = gw['spin2'],
-                        gw_beta=gw['gw_beta'], gw_lambda=gw['gw_lambda'], orbits=orbits_path, domain=gw['domain'])
+                        gw_beta=gw['gw_beta'], gw_lambda=gw['gw_lambda'], orbits=orbits_path)
 
             gw.write(path=gw_path, mode="a", dt=pipe['dt'], size=pipe['size'], t0=pipe['t0'])
 

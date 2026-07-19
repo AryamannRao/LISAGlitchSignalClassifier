@@ -57,6 +57,9 @@ def create_gw_dataset(dataset_path, siglen):
             "spin2",   shape=(0,), maxshape=(None,), dtype="float32"
         )
         h5file.create_dataset(
+            "iota",   shape=(0,), maxshape=(None,), dtype="float32"
+        )
+        h5file.create_dataset(
             "gw_beta",   shape=(0,), maxshape=(None,), dtype="float32"
         )
         h5file.create_dataset(
@@ -70,7 +73,7 @@ def create_gw_dataset(dataset_path, siglen):
 
     return h5file
 
-def append_gw_sample(h5, tdi_dict, m1, m2, d, spin1, spin2, gw_beta, gw_lambda, t0):
+def append_gw_sample(h5, tdi_dict, m1, m2, d, spin1, spin2, iota, gw_beta, gw_lambda, t0):
     X = tdi_dict["X"]
     Y = tdi_dict["Y"]
     Z = tdi_dict["Z"]
@@ -86,6 +89,7 @@ def append_gw_sample(h5, tdi_dict, m1, m2, d, spin1, spin2, gw_beta, gw_lambda, 
     d = np.atleast_1d(d)
     spin1 = np.atleast_1d(spin1)
     spin2 = np.atleast_1d(spin2)
+    iota = np.atleast_1d(iota)
     gw_beta = np.atleast_1d(gw_beta)
     gw_lambda = np.atleast_1d(gw_lambda)
     t0 = np.atleast_1d(t0)
@@ -106,6 +110,7 @@ def append_gw_sample(h5, tdi_dict, m1, m2, d, spin1, spin2, gw_beta, gw_lambda, 
     h5["d"].resize((new_n,))
     h5["spin1"].resize((new_n,))
     h5["spin2"].resize((new_n,))
+    h5["iota"].resize((new_n,))
     h5["gw_beta"].resize((new_n,))
     h5["gw_lambda"].resize((new_n,))
     h5["t0"].resize((new_n,))
@@ -120,6 +125,7 @@ def append_gw_sample(h5, tdi_dict, m1, m2, d, spin1, spin2, gw_beta, gw_lambda, 
     h5["d"][n:new_n] = d
     h5["spin1"][n:new_n] = spin1
     h5["spin2"][n:new_n] = spin2
+    h5["iota"][n:new_n] = iota
     h5["gw_beta"][n:new_n] = gw_beta
     h5["gw_lambda"][n:new_n] = gw_lambda
     h5["t0"][n:new_n] = t0
@@ -130,20 +136,26 @@ def sort_gw_dataset(h5):
     hm = (chirp_masses >= 1e5) & (chirp_masses < 1e6)
     ehm = chirp_masses >= 1e6
 
-    h5_lm = create_gw_dataset(gw_lm_dataset_path, h5["X"].shape[1])
-    h5_hm = create_gw_dataset(gw_hm_dataset_path, h5["X"].shape[1])
-    h5_ehm = create_gw_dataset(gw_ehm_dataset_path, h5["X"].shape[1])
+    if np.sum(lm) > 0:
+        h5_lm = create_gw_dataset(gw_lm_dataset_path, h5["X"].shape[1])
+        tdi_dict_lm = {"X": h5["X"][lm], "Y": h5["Y"][lm], "Z": h5["Z"][lm]}
+        append_gw_sample(h5_lm, tdi_dict_lm, h5["m1"][lm], h5["m2"][lm], h5["d"][lm],
+                     h5["spin1"][lm], h5["spin2"][lm], h5['iota'][lm], h5["gw_beta"][lm],
+                    h5["gw_lambda"][lm], h5["t0"][lm])
 
-    tdi_dict_lm = {"X": h5["X"][lm], "Y": h5["Y"][lm], "Z": h5["Z"][lm]}
-    tdi_dict_hm = {"X": h5["X"][hm], "Y": h5["Y"][hm], "Z": h5["Z"][hm]}
-    tdi_dict_ehm = {"X": h5["X"][ehm], "Y": h5["Y"][ehm], "Z": h5["Z"][ehm]}
-
-    append_gw_sample(h5_lm, tdi_dict_lm, h5["m1"][lm], h5["m2"][lm], h5["d"][lm],
-                     h5["spin1"][lm], h5["spin2"][lm], h5["gw_beta"][lm], h5["gw_lambda"][lm], h5["t0"][lm])
-    append_gw_sample(h5_hm, tdi_dict_hm, h5["m1"][hm], h5["m2"][hm], h5["d"][hm],
-                     h5["spin1"][hm], h5["spin2"][hm], h5["gw_beta"][hm], h5["gw_lambda"][hm], h5["t0"][hm])
-    append_gw_sample(h5_ehm, tdi_dict_ehm, h5["m1"][ehm], h5["m2"][ehm], h5["d"][ehm],
-                     h5["spin1"][ehm], h5["spin2"][ehm], h5["gw_beta"][ehm], h5["gw_lambda"][ehm], h5["t0"][ehm])
+    if np.sum(hm) > 0:
+        h5_hm = create_gw_dataset(gw_hm_dataset_path, h5["X"].shape[1])
+        tdi_dict_hm = {"X": h5["X"][hm], "Y": h5["Y"][hm], "Z": h5["Z"][hm]}
+        append_gw_sample(h5_hm, tdi_dict_hm, h5["m1"][hm], h5["m2"][hm], h5["d"][hm],
+                     h5["spin1"][hm], h5["spin2"][hm], h5['iota'][hm], h5["gw_beta"][hm],
+                    h5["gw_lambda"][hm], h5["t0"][hm])
+   
+    if np.sum(ehm) > 0:
+        h5_ehm = create_gw_dataset(gw_ehm_dataset_path, h5["X"].shape[1])
+        tdi_dict_ehm = {"X": h5["X"][ehm], "Y": h5["Y"][ehm], "Z": h5["Z"][ehm]}
+        append_gw_sample(h5_ehm, tdi_dict_ehm, h5["m1"][ehm], h5["m2"][ehm], h5["d"][ehm],
+                     h5["spin1"][ehm], h5["spin2"][ehm], h5['iota'][ehm], h5["gw_beta"][ehm],
+                    h5["gw_lambda"][ehm], h5["t0"][ehm])
     
 def create_glitch_dataset(dataset_path, siglen):
     if not os.path.exists(dataset_path):
@@ -299,6 +311,9 @@ def create_mixed_dataset(dataset_path, siglen):
             "spin2",   shape=(0,), maxshape=(None,), dtype="float32"
         )
         h5file.create_dataset(
+            "iota",   shape=(0,), maxshape=(None,), dtype="float32"
+        )
+        h5file.create_dataset(
             "gw_beta",   shape=(0,), maxshape=(None,), dtype="float32"
         )
         h5file.create_dataset(
@@ -325,7 +340,7 @@ def create_mixed_dataset(dataset_path, siglen):
 
     return h5file
 
-def append_mixed_sample(h5, tdi_dict, m1, m2, d, spin1, spin2, gw_beta, gw_lambda,
+def append_mixed_sample(h5, tdi_dict, m1, m2, d, spin1, spin2, iota, gw_beta, gw_lambda,
                         amp, beta, inj_point, sep, t0):
     X = tdi_dict["X"]
     Y = tdi_dict["Y"]
@@ -342,6 +357,7 @@ def append_mixed_sample(h5, tdi_dict, m1, m2, d, spin1, spin2, gw_beta, gw_lambd
     d = np.atleast_1d(d)
     spin1 = np.atleast_1d(spin1)
     spin2 = np.atleast_1d(spin2)
+    iota = np.atleast_1d(iota)
     gw_beta = np.atleast_1d(gw_beta)
     gw_lambda = np.atleast_1d(gw_lambda)
     amp = np.atleast_1d(amp)
@@ -366,6 +382,7 @@ def append_mixed_sample(h5, tdi_dict, m1, m2, d, spin1, spin2, gw_beta, gw_lambd
     h5["d"].resize((new_n,))
     h5["spin1"].resize((new_n,))
     h5["spin2"].resize((new_n,))
+    h5["iota"].resize((new_n,))
     h5["gw_beta"].resize((new_n,))
     h5["gw_lambda"].resize((new_n,))
     h5["amp"].resize((new_n,))
@@ -384,6 +401,7 @@ def append_mixed_sample(h5, tdi_dict, m1, m2, d, spin1, spin2, gw_beta, gw_lambd
     h5["d"][n:new_n] = d
     h5["spin1"][n:new_n] = spin1
     h5["spin2"][n:new_n] = spin2
+    h5["iota"][n:new_n] = iota
     h5["gw_beta"][n:new_n] = gw_beta
     h5["gw_lambda"][n:new_n] = gw_lambda
     h5["amp"][n:new_n] = amp
@@ -398,22 +416,25 @@ def sort_mixed_dataset(h5):
     hm = (chirp_masses >= 1e5) & (chirp_masses < 1e6)
     ehm = chirp_masses >= 1e6
 
-    h5_lm = create_mixed_dataset(mixed_lm_dataset_path, h5["X"].shape[1])
-    h5_hm = create_mixed_dataset(mixed_hm_dataset_path, h5["X"].shape[1])
-    h5_ehm = create_mixed_dataset(mixed_ehm_dataset_path, h5["X"].shape[1])
-
-    tdi_dict_lm = {"X": h5["X"][lm], "Y": h5["Y"][lm], "Z": h5["Z"][lm]}
-    tdi_dict_hm = {"X": h5["X"][hm], "Y": h5["Y"][hm], "Z": h5["Z"][hm]}
-    tdi_dict_ehm = {"X": h5["X"][ehm], "Y": h5["Y"][ehm], "Z": h5["Z"][ehm]}
-
-    append_mixed_sample(h5_lm, tdi_dict_lm, h5["m1"][lm], h5["m2"][lm], h5["d"][lm],
-                     h5["spin1"][lm], h5["spin2"][lm], h5["gw_beta"][lm], h5["gw_lambda"][lm],
+    if np.sum(lm) > 0:
+        h5_lm = create_mixed_dataset(mixed_lm_dataset_path, h5["X"].shape[1])
+        tdi_dict_lm = {"X": h5["X"][lm], "Y": h5["Y"][lm], "Z": h5["Z"][lm]}
+        append_mixed_sample(h5_lm, tdi_dict_lm, h5["m1"][lm], h5["m2"][lm], h5["d"][lm],
+                     h5["spin1"][lm], h5["spin2"][lm], h5["iota"][lm], h5["gw_beta"][lm], h5["gw_lambda"][lm],
                      h5["amp"][lm], h5["beta"][lm], h5["inj_point"][lm], h5["sep"][lm], h5["t0"][lm])
-    append_mixed_sample(h5_hm, tdi_dict_hm, h5["m1"][hm], h5["m2"][hm], h5["d"][hm],
-                     h5["spin1"][hm], h5["spin2"][hm], h5["gw_beta"][hm], h5["gw_lambda"][hm],
+
+    if np.sum(hm) > 0:
+        h5_hm = create_mixed_dataset(mixed_hm_dataset_path, h5["X"].shape[1])
+        tdi_dict_hm = {"X": h5["X"][hm], "Y": h5["Y"][hm], "Z": h5["Z"][hm]}
+        append_mixed_sample(h5_hm, tdi_dict_hm, h5["m1"][hm], h5["m2"][hm], h5["d"][hm],
+                     h5["spin1"][hm], h5["spin2"][hm], h5["iota"][hm], h5["gw_beta"][hm], h5["gw_lambda"][hm],
                      h5["amp"][hm], h5["beta"][hm], h5["inj_point"][hm], h5["sep"][hm], h5["t0"][hm])
-    append_mixed_sample(h5_ehm, tdi_dict_ehm, h5["m1"][ehm], h5["m2"][ehm], h5["d"][ehm],
-                     h5["spin1"][ehm], h5["spin2"][ehm], h5["gw_beta"][ehm], h5["gw_lambda"][ehm],
+    
+    if np.sum(ehm) > 0:
+        h5_ehm = create_mixed_dataset(mixed_ehm_dataset_path, h5["X"].shape[1])
+        tdi_dict_ehm = {"X": h5["X"][ehm], "Y": h5["Y"][ehm], "Z": h5["Z"][ehm]}
+        append_mixed_sample(h5_ehm, tdi_dict_ehm, h5["m1"][ehm], h5["m2"][ehm], h5["d"][ehm],
+                     h5["spin1"][ehm], h5["spin2"][ehm], h5["iota"][ehm], h5["gw_beta"][ehm], h5["gw_lambda"][ehm],
                      h5["amp"][ehm], h5["beta"][ehm], h5["inj_point"][ehm], h5["sep"][ehm], h5["t0"][ehm])
 
 def create_empty_dataset(dataset_path, siglen):

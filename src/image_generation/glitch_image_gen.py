@@ -33,7 +33,8 @@ def run_one_sample(args):
     tcen0, X, Y, Z = args
     tdi_dict = make_tdi_dict(X, Y, Z)
     
-    tcen_arr = np.linspace(-2, 2, TIME_STEP)*3600 + tcen0
+    #tcen_arr = np.linspace(-2, 2, TIME_STEP)*3600 + tcen0
+    tcen_arr = np.random.uniform(-2.5, 2.5, size=TIME_STEP)*3600
     
     images = np.zeros((len(tcen_arr), RESOLUTION, RESOLUTION, CHANNELS))
     t_axes = np.zeros((len(tcen_arr), RESOLUTION, CHANNELS))
@@ -41,11 +42,11 @@ def run_one_sample(args):
     tcen_vals = np.zeros(len(tcen_arr))
 
     for i, tcen in enumerate(tcen_arr):
-        event = {'t_inj': PIPE['t_inj'] - tcen}
+        event = PIPE['t_inj'] - tcen
         QT = np.zeros((RESOLUTION, RESOLUTION, CHANNELS))
         t_axis = np.zeros((RESOLUTION, CHANNELS))
         f_axis = np.zeros((RESOLUTION, CHANNELS))
-        for j, spec in enumerate([SPECS['high_mass'], SPECS['ext_high_mass']]):
+        for j, spec in enumerate([SPECS['q6'], SPECS['q16']]):
             t_arr, f_arr, data = generate_qscan(tdi_dict, 'A', PIPE, event, resolution=RESOLUTION,
                                 frange=spec['frange'], trange=spec['trange'], Q=spec['Q'])
 

@@ -3,7 +3,6 @@ os.environ["OMP_NUM_THREADS"] = "1"
 os.environ["MKL_NUM_THREADS"] = "1"
 os.environ["OPENBLAS_NUM_THREADS"] = "1"
 
-from posixpath import sep
 import sys
 import contextlib
 import numpy as np
@@ -19,6 +18,9 @@ if str(SRC_ROOT) not in sys.path:
 from helpers.simulation import *
 from helpers.h5file_helpers import *
 from helpers.config import *
+
+from astropy.cosmology import Planck18, z_at_value
+from astropy import units as u
 
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from tqdm import tqdm
@@ -41,28 +43,34 @@ with h5py.File(orbits_path, 'r') as orb:
     ORB_SIZE = orb.attrs['size']
     ORB_DT = orb.attrs['dt']
 
-NSAMPLES = 2000
+NSAMPLES = 1500
+FILE_PATH = mixed_dataset_path
+
 LOG_MASS_MIN, LOG_MASS_MAX = 4, 7
 Q_MIN, Q_MAX = 1, 5
-LOG_D_MIN, LOG_D_MAX = 3, 5
-SPIN_MIN, SPIN_MAX = 0, 0.99
+Z_MIN, Z_MAX = 0.5, 8
+SPIN_MIN, SPIN_MAX = -0.99, 0.99
 
-BETA_MIN = 1
-AMP_MIN, AMP_MAX = 1e-16, 1e-10
+LOG_BETA_MIN, LOG_BETA_MAX = 0, np.log10(5e3)
+LOG_AMP_MIN, LOG_AMP_MAX = -13, -11
 INJ_POINTS = ['tm_12', 'tm_23', 'tm_13',
               'tm_21', 'tm_32', 'tm_31']
 
-SEP_MIN, SEP_MAX = -1.5, 1.5
+SEP_MIN, SEP_MAX = 0, 2.5
 
 N_WORKERS, CHUNKSIZE = 6, 2
 
+def set_seed(seed):
+    np.random.seed(seed)
+
 def run_one_sample(args):
-    m1, m2, d, spin1, spin2, gw_beta, gw_lambda, amp, beta, inj_point, sep, t0, pipe = args
+    m1, m2, d, spin1, spin2, iota, gw_beta, gw_lambda,\
+          amp, beta, inj_point, sep, t0, pipe = args
 
     pipe['t0'] = t0
     gws = [{'type': 'BinaryInspiralGW',
         'm1': m1, 'm2': m2, 'd': d,
-        'spin1': spin1, 'spin2': spin2,
+        'spin1': spin1, 'spin2': spin2, 'iota': iota,
         'gw_beta': gw_beta, 'gw_lambda': gw_lambda,
         't_inj': pipe['t_inj'] + sep * 3600, 'domain': 'freq'}]
 
@@ -71,7 +79,7 @@ def run_one_sample(args):
 
     pid = os.getpid()
     local_sim_path = f"{simulation_path}_{pid}.h5"
-    local_gw_path     = f"{gw_path}_{pid}.h5"
+    local_gw_path  = f"{gw_path}_{pid}.h5"
     local_glitch_path = f"{glitch_path}_{pid}.h5"
 
     with suppress_output():
@@ -87,7 +95,7 @@ def run_one_sample(args):
     os.remove(local_gw_path)
     os.remove(local_glitch_path)
 
-    return tdi_dict, m1, m2, d, spin1, spin2,\
+    return tdi_dict, m1, m2, d, spin1, spin2, iota,\
         gw_beta, gw_lambda, amp, beta, inj_point, sep, t0
 
 def run_chunk(job_chunk):
@@ -104,75 +112,52 @@ def chunkify(lst, chunksize):
     for i in range(0, len(lst), chunksize):
         yield lst[i:i + chunksize]
 
-def truncated_2d_gaussian(mu, cov, xmin, size):
-    mu_x, mu_y = mu
-    
-    # Step 1: sample x (vectorized)
-    sigma_x = np.sqrt(cov[0, 0])
-    a = (xmin - mu_x) / sigma_x
-    
-    x = truncnorm.rvs(a, np.inf, loc=mu_x, scale=sigma_x, size=size)
-    
-    # Step 2: compute conditional mean (vectorized)
-    beta = cov[1, 0] / cov[0, 0]
-    mu_cond = mu_y + beta * (x - mu_x)
-    
-    # Step 3: conditional variance (scalar)
-    var_cond = cov[1, 1] - (cov[1, 0]**2) / cov[0, 0]
-    sigma_cond = np.sqrt(var_cond)
-    
-    # Step 4: sample y (vectorized)
-    y = np.random.normal(mu_cond, sigma_cond, size=size)
-    
-    return np.column_stack((x, y))
-
 def get_param_values(nsamples):
-    m1_array = 10**np.random.uniform(LOG_MASS_MIN, LOG_MASS_MAX, size=nsamples)
-    m2_array = m1_array * np.random.uniform(Q_MIN, Q_MAX, size=nsamples)
+    Mc_array = 10**np.random.uniform(LOG_MASS_MIN, LOG_MASS_MAX, size=nsamples)
+    q_array = np.random.uniform(Q_MIN, Q_MAX, size=nsamples)
+
+    m1_array = Mc_array * ((1 + q_array)**(1/5) / q_array**(3/5))
+    m2_array = m1_array * q_array
+
     spin1_array = np.random.uniform(SPIN_MIN, SPIN_MAX, size=nsamples)
-    spin2_array = spin1_array * np.random.choice([-1, 1], size=nsamples)
-    d_array = 10**np.random.uniform(LOG_D_MIN, LOG_D_MAX, size=nsamples)
-    gw_beta_array = np.random.uniform(-np.pi/2, np.pi/2, size=nsamples)
+    spin2_array = np.random.uniform(SPIN_MIN, SPIN_MAX, size=nsamples)
+
+    #z_array = np.random.uniform(Z_MIN, Z_MAX, size=nsamples)
+    #d_array = Planck18.luminosity_distance(z_array).value
+
+    d_array = 10**np.random.uniform(3, 5, size=nsamples)
+
+    iota_array = np.arccos(np.random.uniform(-1, 1, size=nsamples))
+    gw_beta_array = np.arcsin(np.random.uniform(-1, 1, size=nsamples))
     gw_lambda_array = np.random.uniform(0, 2*np.pi, size=nsamples)
 
-    params = np.loadtxt(lpf_ord_param_path, skiprows=1)
-    lpf_betas, lpf_levels = params[:, 0], np.abs(params[:, 1])
-    lpf_levels = lpf_levels[lpf_betas > BETA_MIN]
-    lpf_betas = lpf_betas[lpf_betas > BETA_MIN]
-    lpf_betas = lpf_betas[(lpf_levels > AMP_MIN) & (lpf_levels < AMP_MAX)]
-    lpf_levels = lpf_levels[(lpf_levels > AMP_MIN) & (lpf_levels < AMP_MAX)]
-    params = np.vstack((np.log10(lpf_betas), np.log10(lpf_levels))).T
-    mu = np.mean(params, axis=0)
-    cov = np.cov(params, rowvar=False)
-    samples = truncated_2d_gaussian(mu, cov, xmin=np.log10(BETA_MIN), size=nsamples)
-    
-    beta_array = 10**samples[:,0]
-    amp_array  = 10**samples[:,1]
+    beta_array = 10**np.random.uniform(LOG_BETA_MIN, LOG_BETA_MAX, size=nsamples)
+    amp_array  = 10**np.random.uniform(LOG_AMP_MIN, LOG_AMP_MAX, size=nsamples)
     inj_point_array = np.random.choice(INJ_POINTS, nsamples)
 
-    sep_array = np.random.uniform(SEP_MIN, SEP_MAX, nsamples)
+    sep_array = np.random.choice([-1, 1], size=nsamples)*np.random.uniform(SEP_MIN, SEP_MAX, size=nsamples)
     t0_array = ORB_TO + np.random.uniform(0.01, 0.99, size=nsamples)*ORB_SIZE*ORB_DT
 
     return m1_array, m2_array, d_array,\
-          spin1_array, spin2_array, gw_beta_array, gw_lambda_array,\
+          spin1_array, spin2_array, iota_array, gw_beta_array, gw_lambda_array,\
             amp_array, beta_array, inj_point_array, sep_array, t0_array
 
 def main():
     start = time.time()
-
-    m1_array, m2_array, d_array, spin1_array, spin2_array, gw_beta_array, gw_lambda_array,\
+    set_seed(42)
+    m1_array, m2_array, d_array, spin1_array, spin2_array, iota_array, gw_beta_array, gw_lambda_array,\
          amp_array, beta_array, inj_point_array, sep_array, t0_array = get_param_values(NSAMPLES)
 
     jobs = [(m1_array[i], m2_array[i], d_array[i], 
-             spin1_array[i], spin2_array[i], 
+             spin1_array[i], spin2_array[i], iota_array[i],
              gw_beta_array[i], gw_lambda_array[i],
              amp_array[i], beta_array[i], inj_point_array[i],
              sep_array[i], t0_array[i], PIPE) for i in range(NSAMPLES)]
 
-    if os.path.exists(mixed_dataset_path):
-        os.remove(mixed_dataset_path)
+    #if os.path.exists(mixed_dataset_path):
+     #   os.remove(mixed_dataset_path)
     
-    h5file = create_mixed_dataset(mixed_dataset_path, PIPE['size'])
+    h5file = create_mixed_dataset(FILE_PATH, PIPE['size'])
 
     print(f"Running with {N_WORKERS} workers")
 
@@ -185,17 +170,17 @@ def main():
     with ProcessPoolExecutor(max_workers=N_WORKERS) as executor:
         futures = [executor.submit(run_chunk, chunk) for chunk in job_chunks]
 
-        for future in tqdm(as_completed(futures), total=total_chunks, desc="Chunks completed"):
+        for future in tqdm(futures, total=total_chunks, desc="Chunks completed"):
             results = future.result()
             
             completed_samples += len(results)
             tqdm.write(f"Samples done: {completed_samples}/{total_samples}")
             
-            for tdi_dict, m1, m2, d, spin1, spin2, gw_beta, gw_lambda, amp, beta, inj_point, sep, t0 in results:
-                append_mixed_sample(h5file, tdi_dict, m1, m2, d, spin1, spin2, gw_beta, gw_lambda,
+            for tdi_dict, m1, m2, d, spin1, spin2, iota, gw_beta, gw_lambda, amp, beta, inj_point, sep, t0 in results:
+                append_mixed_sample(h5file, tdi_dict, m1, m2, d, spin1, spin2, iota, gw_beta, gw_lambda,
                                     amp, beta, inj_point, sep, t0)
 
-    sort_mixed_dataset(h5file)
+    #sort_mixed_dataset(h5file)
     h5file.close()
 
     end = time.time()

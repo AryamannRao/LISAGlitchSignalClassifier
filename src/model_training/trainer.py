@@ -22,17 +22,16 @@ DATASET_PATH = training_dataset_path
 
 SAVE_DIR = TRAINING_RESULTS / f'run_{datetime.now().strftime("%d%m%y_%H%M%S")}'
 
-WIDTH = 4
+WIDTH = 6
 USE_BATCH_NORM = True
 NORMALISE = False
 BATCH_SIZE = 64
-LEARNING_RATE = 0.0008
-NUM_EPOCHS = 6
+LEARNING_RATE = 0.001
+NUM_EPOCHS = 5
 DROP = 0.0
 
-PLOT_EVERY = 50
-PRINT_EVERY = 15
-
+PLOT_EVERY = 33
+DATASET_SEED, NUMPY_SEED = 67, 42
 DEVICE = torch.device('mps')
 
 def set_seed(seed=42):
@@ -98,16 +97,16 @@ def compute_loss(model, loader, criterion):
 
 def train_model(model, train_data, val_data, test_data,
                 learning_rate=0.005, batch_size=10,
-                num_epochs=10, plot_every=10, print_every=10):
+                num_epochs=10, plot_every=10):
     model = model.to(DEVICE)
     train_loader = DataLoader(train_data, batch_size=batch_size, shuffle=True)
     
-    subset_size = 500
-    rng = np.random.default_rng(42)
-    indices = rng.choice(len(val_data), subset_size, replace=False)
+    #subset_size = 500
+    #rng = np.random.default_rng(DATASET_SEED)
+    #indices = rng.choice(len(val_data), subset_size, replace=False)
 
-    val_subset = Subset(val_data, indices)
-    val_loader = DataLoader(val_subset, batch_size=batch_size)
+    #val_subset = Subset(val_data, indices)
+    val_loader = DataLoader(val_data, batch_size=batch_size)
     
     criterion = torch.nn.BCEWithLogitsLoss()
     optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate, weight_decay=1e-4)
@@ -168,7 +167,8 @@ def plot_results(results):
     f"Training curve (batch size={BATCH_SIZE}, learning rate={LEARNING_RATE}, num epochs={NUM_EPOCHS})\n" +\
     f"Final Valid Soft Acc: {val_soft_acc:.3f}, Final Valid Hard Acc: {val_hard_acc:.3f},\n" +\
     f"Test Soft Acc: {test_soft_acc:.3f}, Test Hard Acc: {test_hard_acc:.3f}, \n" +\
-    f"Final Train loss {train_loss[-1]:.3f}, Final Val loss {valid_loss[-1]:.3f}"
+    f"Final Train loss {train_loss[-1]:.3f}, Final Val loss {valid_loss[-1]:.3f}, \n" +\
+    f"Dataset splitting seed used: {DATASET_SEED}, Numpy seed used: {NUMPY_SEED}"
     fig.suptitle(title, fontsize=12)
 
     axes.plot(iters[:len(train_loss)], train_loss, label='Train loss')
@@ -180,7 +180,7 @@ def plot_results(results):
     plt.savefig(SAVE_DIR / 'training_curves.png')
 
 def main():
-    set_seed(42)
+    set_seed(NUMPY_SEED)
 
     model = CNN(width=WIDTH, bn=USE_BATCH_NORM, normalise=NORMALISE, drop=DROP)
     dataset = LISADataset(DATASET_PATH)
@@ -191,7 +191,7 @@ def main():
     
     results = train_model(model, train_dataset, val_dataset, test_dataset,
                         batch_size=BATCH_SIZE, learning_rate=LEARNING_RATE, 
-                        num_epochs=NUM_EPOCHS, plot_every=PLOT_EVERY, print_every=PRINT_EVERY)
+                        num_epochs=NUM_EPOCHS, plot_every=PLOT_EVERY)
     
     torch.save(model.state_dict(), SAVE_DIR / 'model_weights.pth')
     torch.save(results, SAVE_DIR / 'results.pt')
