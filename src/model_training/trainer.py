@@ -31,7 +31,7 @@ NUM_EPOCHS = 5
 DROP = 0.0
 
 PLOT_EVERY = 33
-DATASET_SEED, NUMPY_SEED = 67, 42
+DATASET_SEED, NUMPY_SEED = 42, 42
 DEVICE = torch.device('mps')
 
 def set_seed(seed=42):

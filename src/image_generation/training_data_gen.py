@@ -10,6 +10,7 @@ from pathlib import Path
 
 from scipy.stats import gaussian_kde
 from scipy.signal import find_peaks
+from skimage.feature import peak_local_max
 
 # Ensure src is on Python path regardless of where code is run from
 SRC_ROOT = Path(__file__).resolve().parent.parent
@@ -68,15 +69,10 @@ def generate_dataset(loc, paths):
     else:
         print(f"Dataset already exists at {loc}")
 
-def filter_by_snr(dataset_path, label, threshold=8):
+def filter_by_snr(dataset_path, training_dict, label, threshold=8):
     with h5py.File(dataset_path, 'r') as h5:
         t_qscan = h5['t_qscan'][:]
         f_qscan = h5['f_qscan'][:]
-
-    training_dict = {}
-    with h5py.File(training_dataset_path, 'r') as h5:
-        for key in list(h5.keys()):
-            training_dict[key] = h5[key][:]
 
     idx = np.where(np.all(training_dict['labels'] == label, axis=1))[0]
     images = training_dict['images'][idx]
@@ -104,11 +100,11 @@ def filter_by_snr(dataset_path, label, threshold=8):
                 good_idx.append(index)
             continue
         try:
-            times = np.linspace(np.min(t_axes[index])/3600, np.max(t_axes[index])/3600, 1000)
+            times = np.linspace(np.min(t_axes[index])/3600, np.max(t_axes[index])/3600, 250)
             pdf = gaussian_kde(T_opt)(times)
             peaks, _ = find_peaks(pdf, width=1, prominence=0.05)
 
-            if len(peaks) == sum(label):
+            if len(peaks) >= sum(label):
                 good_idx.append(index)
         except Exception as e:
             print(f"Sample {index}: {e}")
@@ -123,13 +119,18 @@ def main():
     end = time.time()
     print(f"Training dataset generation took {end - start:.2f} seconds. Filtering started.")
 
-    good_gw = filter_by_snr(gw_dataset_path, label=[1,0], threshold=5)
+    training_dict = {}
+    with h5py.File(training_dataset_path, 'r') as h5:
+        for key in list(h5.keys()):
+            training_dict[key] = h5[key][:]
+
+    good_gw = filter_by_snr(gw_dataset_path, training_dict, label=[1,0], threshold=8)
     print('GW filtering done')
-    good_glitch = filter_by_snr(glitch_dataset_path, label=[0,1], threshold=5)
+    good_glitch = filter_by_snr(glitch_dataset_path, training_dict, label=[0,1], threshold=8)
     print('Glitch filtering done')
-    good_mixed = filter_by_snr(mixed_dataset_path, label=[1,1], threshold=5)
+    good_mixed = filter_by_snr(mixed_dataset_path, training_dict, label=[1,1], threshold=8)
     print('Mixed filtering done')
-    good_empty = filter_by_snr(empty_dataset_path, label=[0,0], threshold=5)
+    good_empty = filter_by_snr(empty_dataset_path, training_dict, label=[0,0], threshold=8)
     print('Empty filtering done')
 
     good_idx = np.concatenate([good_gw, good_glitch, good_mixed, good_empty]).astype(int)
