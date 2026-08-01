@@ -39,7 +39,7 @@ with h5py.File(orbits_path, 'r') as orb:
     ORB_SIZE = orb.attrs['size']
     ORB_DT = orb.attrs['dt']
 
-NSAMPLES = 333
+NSAMPLES = 500
 N_WORKERS, CHUNKSIZE = 6, 2
 
 def run_one_sample(args):

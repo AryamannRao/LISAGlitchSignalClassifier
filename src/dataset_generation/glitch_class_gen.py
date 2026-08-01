@@ -19,6 +19,7 @@ from helpers.h5file_helpers import *
 from helpers.config import *
 from scipy.stats import truncnorm
 
+from joblib import load
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from tqdm import tqdm
 
@@ -40,13 +41,20 @@ with h5py.File(orbits_path, 'r') as orb:
     ORB_SIZE = orb.attrs['size']
     ORB_DT = orb.attrs['dt']
 
-NSAMPLES = 1000
-BETA_MIN = 1
-AMP_MIN, AMP_MAX = 1e-16, 1e-10
+LOG_BETA_MIN, LOG_BETA_MAX = 0, np.log10(5e3)
+LOG_AMP_MIN, LOG_AMP_MAX = -14, -11
 INJ_POINTS = ['tm_12', 'tm_23', 'tm_13',
               'tm_21', 'tm_32', 'tm_31']
 
 N_WORKERS, CHUNKSIZE = 6, 2
+
+TEST = False
+if TEST:
+    FILE_PATH = glitch_testset_path
+    NSAMPLES = 500
+else:
+    FILE_PATH = glitch_dataset_path
+    NSAMPLES = 1000
 
 def run_one_sample(args):
     amp, beta, inj_point, t0, pipe = args
@@ -88,46 +96,34 @@ def chunkify(lst, chunksize):
     for i in range(0, len(lst), chunksize):
         yield lst[i:i + chunksize]
 
-def truncated_2d_gaussian(mu, cov, xmin, size):
-    mu_x, mu_y = mu
-    
-    # Step 1: sample x (vectorized)
-    sigma_x = np.sqrt(cov[0, 0])
-    a = (xmin - mu_x) / sigma_x
-    
-    x = truncnorm.rvs(a, np.inf, loc=mu_x, scale=sigma_x, size=size)
-    
-    # Step 2: compute conditional mean (vectorized)
-    beta = cov[1, 0] / cov[0, 0]
-    mu_cond = mu_y + beta * (x - mu_x)
-    
-    # Step 3: conditional variance (scalar)
-    var_cond = cov[1, 1] - (cov[1, 0]**2) / cov[0, 0]
-    sigma_cond = np.sqrt(var_cond)
-    
-    # Step 4: sample y (vectorized)
-    y = np.random.normal(mu_cond, sigma_cond, size=size)
-    
-    return np.column_stack((x, y))
+def get_filtered_params(nsamples, forest_path, lower, upper):
+    xmin, ymin = lower
+    xmax, ymax = upper
+
+    samples = []
+    clf = load(forest_path)
+    while len(samples) < nsamples:
+        x = np.random.uniform(xmin, xmax, nsamples)
+        y = np.random.uniform(ymin, ymax, nsamples)
+
+        X_new = np.column_stack((x, y))
+        prob = clf.predict_proba(X_new)[:, 1]
+        samples.extend(X_new[prob > 0.9])
+
+    samples = np.vstack(samples)[:nsamples]
+    return samples
 
 def get_param_values(nsamples):
-    """params = np.loadtxt(lpf_ord_param_path, skiprows=1)
-
-    lpf_betas, lpf_levels = params[:, 0], np.abs(params[:, 1])
-    lpf_levels = lpf_levels[lpf_betas > BETA_MIN]
-    lpf_betas = lpf_betas[lpf_betas > BETA_MIN]
-
-    lpf_betas = lpf_betas[(lpf_levels > AMP_MIN) & (lpf_levels < AMP_MAX)]
-    lpf_levels = lpf_levels[(lpf_levels > AMP_MIN) & (lpf_levels < AMP_MAX)]
-
-    params = np.vstack((np.log10(lpf_betas), np.log10(lpf_levels))).T
-
-    mu = np.mean(params, axis=0)
-    cov = np.cov(params, rowvar=False)
-    samples = truncated_2d_gaussian(mu, cov, xmin=np.log10(BETA_MIN), size=nsamples)"""
-    
-    beta_array = 10**np.random.uniform(0, np.log10(5e3), size=nsamples)
-    amp_array  = 10**np.random.uniform(-14, -11, size=nsamples)
+    if TEST:
+        beta_array = 10**np.random.uniform(LOG_BETA_MIN, LOG_BETA_MAX, size=nsamples)
+        amp_array  = 10**np.random.uniform(LOG_AMP_MIN, LOG_AMP_MAX, size=nsamples)
+    else:
+        glitch_params = get_filtered_params(nsamples, glitch_forest_path, 
+                                            lower=[LOG_BETA_MIN, LOG_AMP_MIN],
+                                            upper=[LOG_BETA_MAX, LOG_AMP_MAX])
+        beta_array = 10**glitch_params[:,0]
+        amp_array = 10**glitch_params[:,1]
+         
     inj_point_array = np.random.choice(INJ_POINTS, nsamples)
     t0_array = ORB_TO + np.random.uniform(0.01, 0.99, size=nsamples)*ORB_SIZE*ORB_DT
 
@@ -141,10 +137,10 @@ def main():
     jobs = [(amp_array[i], beta_array[i], inj_point_array[i], t0_array[i], PIPE) for i in range(NSAMPLES)]
     
     # Create dataset
-    #if os.path.exists(glitch_dataset_path):
-     #   os.remove(glitch_dataset_path)
+    #if os.path.exists(FILE_PATH):
+     #   os.remove(FILE_PATH)
 
-    h5file = create_glitch_dataset(glitch_dataset_path, PIPE['size'])
+    h5file = create_glitch_dataset(FILE_PATH, PIPE['size'])
 
     print(f"Running with {N_WORKERS} workers")
 

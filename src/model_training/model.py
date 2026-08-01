@@ -42,7 +42,9 @@ class CNN(nn.Module):
 
     def forward(self, x):
         if self.norm:
-            x = x/x.amax(dim=(1, 2, 3), keepdim=True)
+            mean = x.mean(dim=(1, 2, 3), keepdim=True)
+            std = x.std(dim=(1, 2, 3), keepdim=True)
+            x = (x - mean) / (std + 1e-8)
         x = self.pool(torch.relu(self.conv1(x)))
         if self.bn:
             x = self.bn1(x)

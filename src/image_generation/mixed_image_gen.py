@@ -30,7 +30,7 @@ N_WORKERS, CHUNKSIZE = 6, 2
 
 def run_one_sample(args):
     tcen0, sep, X, Y, Z = args
-    tdi_dict = make_tdi_dict(X, Y, Z)
+    tdi_dict = make_tdi_dict(X, Y, Z, whiten=False)
     
     tcen_arr = np.random.uniform(-(2.5-np.abs(sep)), 2.5-np.abs(sep), size=TIME_STEP)*3600
     

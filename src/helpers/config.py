@@ -38,12 +38,16 @@ gw_testset_path = str(GW_DATASETS / 'gw_testset.h5')
 mixed_testset_path = str(MIXED_DATASETS / 'mixed_testset.h5')
 empty_testset_path = str(EMPTY_DATASETS / 'empty_testset.h5')
 
+glitch_forest_path = str(GLITCH_DATASETS / 'glitch_random_forest.joblib')
+gw_forest_path = str(GW_DATASETS / 'gw_random_forest.joblib')
+mixed_forest_path = str(MIXED_DATASETS / 'mixed_random_forest.joblib')
+
 with h5py.File(orbits_path, 'r') as orb:
     orb_t0 = orb.attrs['t0']
     orb_size = orb.attrs['size']
     orb_dt = orb.attrs['dt']
 
-PIPE = {'t0': orb_t0 + orb_size*orb_dt/2, 'dt': 0.25,'size': int(10 * 3600 / 0.25),
+PIPE = {'t0': orb_t0 + orb_size*orb_dt/2, 'dt': 1,'size': int(10 * 3600 / 1),
         't_inj': 5 * 3600, 'keep_noises': ['test-mass', 'oms']}
 SPECS = {'q16': {'trange':(-3, 3), 'frange':(1e-4, 1e-1), 'Q':16},
          'q6': {'trange':(-3, 3), 'frange':(1e-4, 1e-1), 'Q':6}}

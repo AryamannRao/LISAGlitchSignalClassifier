@@ -24,7 +24,7 @@ SAVE_DIR = TRAINING_RESULTS / f'run_{datetime.now().strftime("%d%m%y_%H%M%S")}'
 
 WIDTH = 6
 USE_BATCH_NORM = True
-NORMALISE = False
+NORMALISE = True
 BATCH_SIZE = 64
 LEARNING_RATE = 0.001
 NUM_EPOCHS = 5

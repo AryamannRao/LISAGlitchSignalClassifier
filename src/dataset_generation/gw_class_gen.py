@@ -21,6 +21,7 @@ from helpers.simulation import *
 from helpers.h5file_helpers import *
 from helpers.config import *
 
+from joblib import load
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from tqdm import tqdm
 
@@ -42,12 +43,16 @@ with h5py.File(orbits_path, 'r') as orb:
     ORB_SIZE = orb.attrs['size']
     ORB_DT = orb.attrs['dt']
 
-NSAMPLES = 1250
-MASS_CATEGORY = 'ext_high_mass'
-
-FILE_PATH = gw_dataset_path
+TEST = False
+if TEST:
+    FILE_PATH = gw_testset_path
+    NSAMPLES = 500
+else:
+    FILE_PATH = gw_dataset_path
+    NSAMPLES = 1000
 
 LOG_MASS_MIN, LOG_MASS_MAX = 4, 7
+LOG_D_MIN, LOG_D_MAX = 3, 5
 Q_MIN, Q_MAX = 1, 5
 SPIN_MIN, SPIN_MAX = -0.99, 0.99
 Z_MIN, Z_MAX = 0.5, 8
@@ -99,17 +104,39 @@ def chunkify(lst, chunksize):
     for i in range(0, len(lst), chunksize):
         yield lst[i:i + chunksize]
 
+def get_filtered_params(nsamples, forest_path, lower, upper):
+    xmin, ymin = lower
+    xmax, ymax = upper
+
+    samples = []
+    clf = load(forest_path)
+    while len(samples) < nsamples:
+        x = np.random.uniform(xmin, xmax, nsamples)
+        y = np.random.uniform(ymin, ymax, nsamples)
+
+        X_new = np.column_stack((x, y))
+        prob = clf.predict_proba(X_new)[:, 1]
+        samples.extend(X_new[prob > 0.9])
+
+    samples = np.vstack(samples)[:nsamples]
+    return samples
+
 def get_param_values(nsamples):
-    Mc_array = 10**np.random.uniform(LOG_MASS_MIN, LOG_MASS_MAX, size=nsamples)
+    if TEST:
+        Mc_array = 10**np.random.uniform(LOG_MASS_MIN, LOG_MASS_MAX, size=nsamples)
+        d_array = 10**np.random.uniform(LOG_D_MIN, LOG_D_MAX, size=nsamples)
+
+    else:
+        gw_mass_params = get_filtered_params(nsamples, gw_forest_path, 
+                                              lower=[LOG_D_MIN, LOG_MASS_MIN],
+                                              upper=[LOG_D_MAX, LOG_MASS_MAX])
+        Mc_array = 10**gw_mass_params[:,1]
+        d_array = 10**gw_mass_params[:,0] 
+
     q_array = np.random.uniform(Q_MIN, Q_MAX, size=nsamples)
 
     m1_array = Mc_array * ((1 + q_array)**(1/5) / q_array**(3/5))
     m2_array = m1_array * q_array
-
-    #z_array = np.random.uniform(Z_MIN, Z_MAX, size=nsamples)
-    #d_array = Planck18.luminosity_distance(z_array).value
-
-    d_array = 10**np.random.uniform(3, 5, size=nsamples)
 
     spin1_array = np.random.uniform(SPIN_MIN, SPIN_MAX, size=nsamples)
     spin2_array = np.random.uniform(SPIN_MIN, SPIN_MAX, size=nsamples)
@@ -118,13 +145,6 @@ def get_param_values(nsamples):
     gw_beta_array = np.arcsin(np.random.uniform(-1, 1, size=nsamples))
     gw_lambda_array = np.random.uniform(0, 2*np.pi, size=nsamples)
     t0_array = ORB_TO + np.random.uniform(0.01, 0.99, size=nsamples)*ORB_SIZE*ORB_DT
-
-    """d_array = 1e4*np.ones(nsamples)
-    spin1_array, spin2_array = np.zeros(nsamples), np.zeros(nsamples)
-    iota_array = np.zeros(nsamples)
-    gw_beta_array = np.zeros(nsamples)
-    gw_lambda_array = np.zeros(nsamples)
-    t0_array = ORB_TO + 0.5*np.ones(nsamples)*ORB_SIZE*ORB_DT"""
 
     return m1_array, m2_array, d_array, spin1_array, spin2_array, iota_array, gw_beta_array, gw_lambda_array, t0_array
 

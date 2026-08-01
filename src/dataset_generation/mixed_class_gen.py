@@ -22,6 +22,7 @@ from helpers.config import *
 from astropy.cosmology import Planck18, z_at_value
 from astropy import units as u
 
+from joblib import load
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from tqdm import tqdm
 
@@ -43,16 +44,16 @@ with h5py.File(orbits_path, 'r') as orb:
     ORB_SIZE = orb.attrs['size']
     ORB_DT = orb.attrs['dt']
 
-NSAMPLES = 1500
+NSAMPLES = 2000
 FILE_PATH = mixed_dataset_path
 
 LOG_MASS_MIN, LOG_MASS_MAX = 4, 7
 Q_MIN, Q_MAX = 1, 5
-Z_MIN, Z_MAX = 0.5, 8
+LOG_D_MIN, LOG_D_MAX = 3, 5
 SPIN_MIN, SPIN_MAX = -0.99, 0.99
 
 LOG_BETA_MIN, LOG_BETA_MAX = 0, np.log10(5e3)
-LOG_AMP_MIN, LOG_AMP_MAX = -13, -11
+LOG_AMP_MIN, LOG_AMP_MAX = -14, -11
 INJ_POINTS = ['tm_12', 'tm_23', 'tm_13',
               'tm_21', 'tm_32', 'tm_31']
 
@@ -112,27 +113,53 @@ def chunkify(lst, chunksize):
     for i in range(0, len(lst), chunksize):
         yield lst[i:i + chunksize]
 
-def get_param_values(nsamples):
-    Mc_array = 10**np.random.uniform(LOG_MASS_MIN, LOG_MASS_MAX, size=nsamples)
-    q_array = np.random.uniform(Q_MIN, Q_MAX, size=nsamples)
+def get_filtered_params(nsamples, forest_path, lower, upper):
+    xmin, ymin = lower
+    xmax, ymax = upper
 
+    samples = []
+    clf = load(forest_path)
+    while len(samples) < nsamples:
+        x = np.random.uniform(xmin, xmax, nsamples)
+        y = np.random.uniform(ymin, ymax, nsamples)
+
+        X_new = np.column_stack((x, y))
+        prob = clf.predict_proba(X_new)[:, 1]
+        samples.extend(X_new[prob > 0.9])
+
+    samples = np.vstack(samples)[:nsamples]
+    return samples
+
+def get_param_values(nsamples):
+    """Mc_array = 10**np.random.uniform(LOG_MASS_MIN, LOG_MASS_MAX, size=nsamples)
+    d_array = 10**np.random.uniform(LOG_D_MIN, LOG_D_MAX, size=nsamples)
+    beta_array = 10**np.random.uniform(LOG_BETA_MIN, LOG_BETA_MAX, size=nsamples)
+    amp_array  = 10**np.random.uniform(LOG_AMP_MIN, LOG_AMP_MAX, size=nsamples)"""
+
+    gw_mass_params = get_filtered_params(nsamples, gw_forest_path, 
+                                      lower=[LOG_D_MIN, LOG_MASS_MIN],
+                                      upper=[LOG_D_MAX, LOG_MASS_MAX])
+    Mc_array = 10**gw_mass_params[:,1]
+    d_array = 10**gw_mass_params[:,0] 
+
+    glitch_params = get_filtered_params(nsamples, glitch_forest_path, 
+                                          lower=[LOG_BETA_MIN, LOG_AMP_MIN],
+                                          upper=[LOG_BETA_MAX, LOG_AMP_MAX])
+    amp_array = 10**glitch_params[:,1]
+    beta_array = 10**glitch_params[:,0] 
+
+    q_array = np.random.uniform(Q_MIN, Q_MAX, size=nsamples)
+    
     m1_array = Mc_array * ((1 + q_array)**(1/5) / q_array**(3/5))
     m2_array = m1_array * q_array
 
     spin1_array = np.random.uniform(SPIN_MIN, SPIN_MAX, size=nsamples)
     spin2_array = np.random.uniform(SPIN_MIN, SPIN_MAX, size=nsamples)
 
-    #z_array = np.random.uniform(Z_MIN, Z_MAX, size=nsamples)
-    #d_array = Planck18.luminosity_distance(z_array).value
-
-    d_array = 10**np.random.uniform(3, 5, size=nsamples)
-
     iota_array = np.arccos(np.random.uniform(-1, 1, size=nsamples))
     gw_beta_array = np.arcsin(np.random.uniform(-1, 1, size=nsamples))
     gw_lambda_array = np.random.uniform(0, 2*np.pi, size=nsamples)
 
-    beta_array = 10**np.random.uniform(LOG_BETA_MIN, LOG_BETA_MAX, size=nsamples)
-    amp_array  = 10**np.random.uniform(LOG_AMP_MIN, LOG_AMP_MAX, size=nsamples)
     inj_point_array = np.random.choice(INJ_POINTS, nsamples)
 
     sep_array = np.random.choice([-1, 1], size=nsamples)*np.random.uniform(SEP_MIN, SEP_MAX, size=nsamples)
