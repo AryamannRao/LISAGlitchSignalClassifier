@@ -10,7 +10,6 @@ from pathlib import Path
 
 from scipy.stats import gaussian_kde
 from scipy.signal import find_peaks
-from skimage.feature import peak_local_max
 
 # Ensure src is on Python path regardless of where code is run from
 SRC_ROOT = Path(__file__).resolve().parent.parent
@@ -130,7 +129,7 @@ def main():
     print('Glitch filtering done')
     good_mixed = filter_by_snr(mixed_dataset_path, training_dict, label=[1,1], threshold=8)
     print('Mixed filtering done')
-    good_empty = filter_by_snr(empty_dataset_path, training_dict, label=[0,0], threshold=8)
+    good_empty = np.where(np.all(training_dict['labels'] == [0,0], axis=1))[0]
     print('Empty filtering done')
 
     good_idx = np.concatenate([good_gw, good_glitch, good_mixed, good_empty]).astype(int)

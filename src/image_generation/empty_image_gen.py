@@ -32,7 +32,7 @@ def run_one_sample(args):
     X, Y, Z = args
     tdi_dict = make_tdi_dict(X, Y, Z, whiten=False)
     
-    tcen_arr = np.random.uniform(-2.5, 2.5, size=TIME_STEP)*3600
+    tcen_arr = np.random.uniform(-3, 3, size=TIME_STEP)*3600
     
     images = np.zeros((len(tcen_arr), RESOLUTION, RESOLUTION, CHANNELS))
     t_axes = np.zeros((len(tcen_arr), RESOLUTION, CHANNELS))

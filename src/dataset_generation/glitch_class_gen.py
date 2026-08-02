@@ -54,7 +54,7 @@ if TEST:
     NSAMPLES = 500
 else:
     FILE_PATH = glitch_dataset_path
-    NSAMPLES = 1000
+    NSAMPLES = 80
 
 def run_one_sample(args):
     amp, beta, inj_point, t0, pipe = args

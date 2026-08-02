@@ -22,15 +22,24 @@ DATASET_PATH = training_dataset_path
 
 SAVE_DIR = TRAINING_RESULTS / f'run_{datetime.now().strftime("%d%m%y_%H%M%S")}'
 
-WIDTH = 6
+"""WIDTH = 6
 USE_BATCH_NORM = True
 NORMALISE = True
 BATCH_SIZE = 64
 LEARNING_RATE = 0.001
 NUM_EPOCHS = 5
 DROP = 0.0
+PLOT_EVERY = 33"""
 
-PLOT_EVERY = 33
+WIDTH = MODEL_PARAMS['width']
+USE_BATCH_NORM = MODEL_PARAMS['bn']
+NORMALISE = MODEL_PARAMS['normalise']
+BATCH_SIZE = MODEL_PARAMS['batch_size']
+LEARNING_RATE = MODEL_PARAMS['learning_rate']
+NUM_EPOCHS = MODEL_PARAMS['num_epochs']
+DROP = MODEL_PARAMS['drop']
+PLOT_EVERY = MODEL_PARAMS['plot_every']
+
 DATASET_SEED, NUMPY_SEED = 42, 42
 DEVICE = torch.device('mps')
 

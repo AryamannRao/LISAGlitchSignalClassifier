@@ -8,7 +8,7 @@ SRC = PROJECT_ROOT / 'src'
 DIST = PROJECT_ROOT / 'dist'
 TRAINING_DATASETS = DIST / 'training_datasets'
 TRAINING_RESULTS = DIST / 'training_results'
-INFERENCE_DATASETS = DIST / 'inference_datasets'
+INFERENCE = DIST / 'inference'
 PSD_PATH = DIST / 'psd_estimates'
 FIGURES = DIST / 'figures'
 
@@ -16,7 +16,7 @@ GW_DATASETS = TRAINING_DATASETS / 'gw_datasets'
 GLITCH_DATASETS = TRAINING_DATASETS / 'glitch_datasets'
 MIXED_DATASETS = TRAINING_DATASETS / 'mixed_datasets'
 EMPTY_DATASETS = TRAINING_DATASETS / 'empty_datasets'
-LPF_DATASETS = INFERENCE_DATASETS / 'lpf_datasets'
+LPF_DATASETS = INFERENCE / 'lpf_datasets'
 
 orbits_path = str(DIST/ 'orbits' / 'orbits.h5')
 simulation_path = str(DIST / 'default_simulation_output.h5')
@@ -42,6 +42,10 @@ glitch_forest_path = str(GLITCH_DATASETS / 'glitch_random_forest.joblib')
 gw_forest_path = str(GW_DATASETS / 'gw_random_forest.joblib')
 mixed_forest_path = str(MIXED_DATASETS / 'mixed_random_forest.joblib')
 
+glitch_timecen_path = str(INFERENCE / 'time_centering' / 'glitch_timecen.h5')
+gw_timecen_path = str(INFERENCE / 'time_centering' / 'gw_timecen.h5')
+timecen_result_path = str(INFERENCE / 'time_centering' / 'inference_results.npz')
+
 with h5py.File(orbits_path, 'r') as orb:
     orb_t0 = orb.attrs['t0']
     orb_size = orb.attrs['size']
@@ -51,3 +55,6 @@ PIPE = {'t0': orb_t0 + orb_size*orb_dt/2, 'dt': 1,'size': int(10 * 3600 / 1),
         't_inj': 5 * 3600, 'keep_noises': ['test-mass', 'oms']}
 SPECS = {'q16': {'trange':(-3, 3), 'frange':(1e-4, 1e-1), 'Q':16},
          'q6': {'trange':(-3, 3), 'frange':(1e-4, 1e-1), 'Q':6}}
+MODEL_PARAMS = {'width': 6, 'bn': True, 'normalise': True,
+                'drop': 0.0, 'num_epochs': 5, 'learning_rate': 0.001,
+                'batch_size': 64, 'plot_every': 33}

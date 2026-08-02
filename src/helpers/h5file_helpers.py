@@ -130,33 +130,6 @@ def append_gw_sample(h5, tdi_dict, m1, m2, d, spin1, spin2, iota, gw_beta, gw_la
     h5["gw_lambda"][n:new_n] = gw_lambda
     h5["t0"][n:new_n] = t0
 
-def sort_gw_dataset(h5):
-    chirp_masses = chirp_mass(h5["m1"][:], h5["m2"][:])
-    lm = chirp_masses < 1e5
-    hm = (chirp_masses >= 1e5) & (chirp_masses < 1e6)
-    ehm = chirp_masses >= 1e6
-
-    if np.sum(lm) > 0:
-        h5_lm = create_gw_dataset(gw_lm_dataset_path, h5["X"].shape[1])
-        tdi_dict_lm = {"X": h5["X"][lm], "Y": h5["Y"][lm], "Z": h5["Z"][lm]}
-        append_gw_sample(h5_lm, tdi_dict_lm, h5["m1"][lm], h5["m2"][lm], h5["d"][lm],
-                     h5["spin1"][lm], h5["spin2"][lm], h5['iota'][lm], h5["gw_beta"][lm],
-                    h5["gw_lambda"][lm], h5["t0"][lm])
-
-    if np.sum(hm) > 0:
-        h5_hm = create_gw_dataset(gw_hm_dataset_path, h5["X"].shape[1])
-        tdi_dict_hm = {"X": h5["X"][hm], "Y": h5["Y"][hm], "Z": h5["Z"][hm]}
-        append_gw_sample(h5_hm, tdi_dict_hm, h5["m1"][hm], h5["m2"][hm], h5["d"][hm],
-                     h5["spin1"][hm], h5["spin2"][hm], h5['iota'][hm], h5["gw_beta"][hm],
-                    h5["gw_lambda"][hm], h5["t0"][hm])
-   
-    if np.sum(ehm) > 0:
-        h5_ehm = create_gw_dataset(gw_ehm_dataset_path, h5["X"].shape[1])
-        tdi_dict_ehm = {"X": h5["X"][ehm], "Y": h5["Y"][ehm], "Z": h5["Z"][ehm]}
-        append_gw_sample(h5_ehm, tdi_dict_ehm, h5["m1"][ehm], h5["m2"][ehm], h5["d"][ehm],
-                     h5["spin1"][ehm], h5["spin2"][ehm], h5['iota'][ehm], h5["gw_beta"][ehm],
-                    h5["gw_lambda"][ehm], h5["t0"][ehm])
-    
 def create_glitch_dataset(dataset_path, siglen):
     if not os.path.exists(dataset_path):
         h5file = h5py.File(dataset_path, "w")
@@ -245,25 +218,6 @@ def append_glitch_sample(h5, tdi_dict, amp, beta, inj_point, t0):
     h5["beta"][n:new_n] = beta
     h5["inj_point"][n:new_n] = inj_point
     h5["t0"][n:new_n] = t0
-
-def sort_glitch_dataset(h5):
-    n = h5["X"].shape[0]
-
-    lm = np.arange(0, n//3, 1)
-    hm = np.arange(n//3, 2*n//3, 1)
-    ehm = np.arange(2*n//3, n, 1)
-
-    h5_lm = create_glitch_dataset(glitch_lm_dataset_path, h5["X"].shape[1])
-    h5_hm = create_glitch_dataset(glitch_hm_dataset_path, h5["X"].shape[1])
-    h5_ehm = create_glitch_dataset(glitch_ehm_dataset_path, h5["X"].shape[1])
-
-    tdi_dict_lm = {"X": h5["X"][lm], "Y": h5["Y"][lm], "Z": h5["Z"][lm]}
-    tdi_dict_hm = {"X": h5["X"][hm], "Y": h5["Y"][hm], "Z": h5["Z"][hm]}
-    tdi_dict_ehm = {"X": h5["X"][ehm], "Y": h5["Y"][ehm], "Z": h5["Z"][ehm]}
-
-    append_glitch_sample(h5_lm, tdi_dict_lm, h5["level"][lm], h5["beta"][lm], h5["inj_point"][lm], h5["t0"][lm])
-    append_glitch_sample(h5_hm, tdi_dict_hm, h5["level"][hm], h5["beta"][hm], h5["inj_point"][hm], h5["t0"][hm])
-    append_glitch_sample(h5_ehm, tdi_dict_ehm, h5["level"][ehm], h5["beta"][ehm], h5["inj_point"][ehm], h5["t0"][ehm])
 
 def create_mixed_dataset(dataset_path, siglen):
     if not os.path.exists(dataset_path):
@@ -410,33 +364,6 @@ def append_mixed_sample(h5, tdi_dict, m1, m2, d, spin1, spin2, iota, gw_beta, gw
     h5["sep"][n:new_n] = sep
     h5["t0"][n:new_n] = t0
 
-def sort_mixed_dataset(h5):
-    chirp_masses = chirp_mass(h5["m1"][:], h5["m2"][:])
-    lm = chirp_masses < 1e5
-    hm = (chirp_masses >= 1e5) & (chirp_masses < 1e6)
-    ehm = chirp_masses >= 1e6
-
-    if np.sum(lm) > 0:
-        h5_lm = create_mixed_dataset(mixed_lm_dataset_path, h5["X"].shape[1])
-        tdi_dict_lm = {"X": h5["X"][lm], "Y": h5["Y"][lm], "Z": h5["Z"][lm]}
-        append_mixed_sample(h5_lm, tdi_dict_lm, h5["m1"][lm], h5["m2"][lm], h5["d"][lm],
-                     h5["spin1"][lm], h5["spin2"][lm], h5["iota"][lm], h5["gw_beta"][lm], h5["gw_lambda"][lm],
-                     h5["amp"][lm], h5["beta"][lm], h5["inj_point"][lm], h5["sep"][lm], h5["t0"][lm])
-
-    if np.sum(hm) > 0:
-        h5_hm = create_mixed_dataset(mixed_hm_dataset_path, h5["X"].shape[1])
-        tdi_dict_hm = {"X": h5["X"][hm], "Y": h5["Y"][hm], "Z": h5["Z"][hm]}
-        append_mixed_sample(h5_hm, tdi_dict_hm, h5["m1"][hm], h5["m2"][hm], h5["d"][hm],
-                     h5["spin1"][hm], h5["spin2"][hm], h5["iota"][hm], h5["gw_beta"][hm], h5["gw_lambda"][hm],
-                     h5["amp"][hm], h5["beta"][hm], h5["inj_point"][hm], h5["sep"][hm], h5["t0"][hm])
-    
-    if np.sum(ehm) > 0:
-        h5_ehm = create_mixed_dataset(mixed_ehm_dataset_path, h5["X"].shape[1])
-        tdi_dict_ehm = {"X": h5["X"][ehm], "Y": h5["Y"][ehm], "Z": h5["Z"][ehm]}
-        append_mixed_sample(h5_ehm, tdi_dict_ehm, h5["m1"][ehm], h5["m2"][ehm], h5["d"][ehm],
-                     h5["spin1"][ehm], h5["spin2"][ehm], h5["iota"][ehm], h5["gw_beta"][ehm], h5["gw_lambda"][ehm],
-                     h5["amp"][ehm], h5["beta"][ehm], h5["inj_point"][ehm], h5["sep"][ehm], h5["t0"][ehm])
-
 def create_empty_dataset(dataset_path, siglen):
     if not os.path.exists(dataset_path):
         h5file = h5py.File(dataset_path, "w")
@@ -503,25 +430,6 @@ def append_empty_sample(h5, tdi_dict, t0):
     h5["Y"][n:new_n] = Y.astype("float32")
     h5["Z"][n:new_n] = Z.astype("float32")
     h5["t0"][n:new_n] = t0
-
-def sort_empty_dataset(h5):
-    n = h5["X"].shape[0]
-
-    lm = np.arange(0, n//3, 1)
-    hm = np.arange(n//3, 2*n//3, 1)
-    ehm = np.arange(2*n//3, n, 1)
-
-    h5_lm = create_empty_dataset(empty_lm_dataset_path, h5["X"].shape[1])
-    h5_hm = create_empty_dataset(empty_hm_dataset_path, h5["X"].shape[1])
-    h5_ehm = create_empty_dataset(empty_ehm_dataset_path, h5["X"].shape[1])
-
-    tdi_dict_lm = {"X": h5["X"][lm], "Y": h5["Y"][lm], "Z": h5["Z"][lm]}
-    tdi_dict_hm = {"X": h5["X"][hm], "Y": h5["Y"][hm], "Z": h5["Z"][hm]}
-    tdi_dict_ehm = {"X": h5["X"][ehm], "Y": h5["Y"][ehm], "Z": h5["Z"][ehm]}
-
-    append_empty_sample(h5_lm, tdi_dict_lm, h5["t0"][lm])
-    append_empty_sample(h5_hm, tdi_dict_hm, h5["t0"][hm])
-    append_empty_sample(h5_ehm, tdi_dict_ehm, h5["t0"][ehm])
 
 def create_imageset(dataset_path, time_steps, resolution, channels, keys):
     image_key, tarr_key, farr_key = keys

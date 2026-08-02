@@ -29,10 +29,10 @@ CHANNELS = 2
 N_WORKERS, CHUNKSIZE = 6, 2
 
 def run_one_sample(args):
-    tcen0, sep, X, Y, Z = args
+    sep, X, Y, Z = args
     tdi_dict = make_tdi_dict(X, Y, Z, whiten=False)
     
-    tcen_arr = np.random.uniform(-(2.5-np.abs(sep)), 2.5-np.abs(sep), size=TIME_STEP)*3600
+    tcen_arr = np.random.uniform(-(3-np.abs(sep)), 3-np.abs(sep), size=TIME_STEP)*3600
     
     images = np.zeros((len(tcen_arr), RESOLUTION, RESOLUTION, CHANNELS))
     t_axes = np.zeros((len(tcen_arr), RESOLUTION, CHANNELS))
@@ -100,11 +100,9 @@ def main():
         Z_array = h5file["Z"][n_images:]
         sep_array = h5file["sep"][n_images:]
 
-    tcen_array = np.random.uniform(-1, 1, size=len(X_array)) * 3600
-
     # Prepare job list
-    jobs = [(tcen_array[i], sep_array[i], X_array[i], Y_array[i], Z_array[i])
-             for i in range(len(tcen_array))]
+    jobs = [(sep_array[i], X_array[i], Y_array[i], Z_array[i])
+             for i in range(len(sep_array))]
 
     print(f"Running with {N_WORKERS} workers")
 
