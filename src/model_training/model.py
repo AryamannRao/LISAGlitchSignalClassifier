@@ -12,7 +12,7 @@ class CNN(nn.Module):
         self.bn = bn
         self.norm = normalise
         self.drop = drop
-        self.conv1 = nn.Conv2d(in_channels=2,
+        self.conv1 = nn.Conv2d(in_channels=4,
                                out_channels=self.width,
                                kernel_size=3,
                                padding=1)
@@ -37,7 +37,7 @@ class CNN(nn.Module):
         
         self.pool = nn.MaxPool2d(2, 2)
         self.dropout = nn.Dropout(self.drop)
-        self.fc1 = nn.Linear(self.width * 8 * 16 * 16, 100)
+        self.fc1 = nn.Linear(self.width * 8 * 8 * 8, 100)
         self.fc2 = nn.Linear(100, 2)
 
     def forward(self, x):
@@ -57,7 +57,7 @@ class CNN(nn.Module):
         x = self.pool(torch.relu(self.conv4(x)))
         if self.bn:
             x = self.bn4(x)
-        x = x.view(-1, self.width * 8 * 16 * 16)
+        x = x.view(-1, self.width * 8 * 8 * 8)
         x = torch.relu(self.fc1(x))
         x = self.dropout(x)
         return self.fc2(x)

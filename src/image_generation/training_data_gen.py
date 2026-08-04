@@ -34,8 +34,8 @@ def generate_dataset(loc, paths):
                 total += shape[0] * shape[1]
 
         with h5py.File(loc, "w") as f:
-            img_ds = f.create_dataset("images", shape=(total,256,256,2),
-                dtype="float32", compression="lzf", chunks=(64,256,256,2))
+            img_ds = f.create_dataset("images", shape=(total,128,128,4),
+                dtype="float32", compression="lzf", chunks=(64,128,128,4))
 
             label_ds = f.create_dataset("labels", shape=(total,2), dtype="int8")
             sim_index_ds = f.create_dataset("sim_index", shape=(total,), dtype="int64")
@@ -50,7 +50,7 @@ def generate_dataset(loc, paths):
                     arr = f_in[KEY][:]
 
                 # flatten
-                flat = arr.reshape(-1,256,256,2)
+                flat = arr.reshape(-1,128,128,4)
                 sim_indices = np.repeat(np.arange(arr.shape[0]), arr.shape[1])
                 time_indices = np.tile(np.arange(arr.shape[1]), arr.shape[0])
                 n = flat.shape[0]

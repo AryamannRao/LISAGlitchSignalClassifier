@@ -23,9 +23,9 @@ from tqdm import tqdm
 
 FILE_PATH = empty_dataset_path
 
-RESOLUTION = 256
+RESOLUTION = 128
 TIME_STEP = 5
-CHANNELS = 2
+CHANNELS = 4
 N_WORKERS, CHUNKSIZE = 6, 2
 
 def run_one_sample(args):
@@ -44,13 +44,17 @@ def run_one_sample(args):
         QT = np.zeros((RESOLUTION, RESOLUTION, CHANNELS))
         t_axis = np.zeros((RESOLUTION, CHANNELS))
         f_axis = np.zeros((RESOLUTION, CHANNELS))
-        for j, spec in enumerate([SPECS['q6'], SPECS['q16']]):
-            t_arr, f_arr, data = generate_qscan(tdi_dict, 'A', PIPE, event, resolution=RESOLUTION,
-                                frange=spec['frange'], trange=spec['trange'], Q=spec['Q'])
 
-            QT[:, :, j] = data
-            t_axis[:, j] = t_arr
-            f_axis[:, j] = f_arr
+        j = 0
+        for channel in ['A', 'E']:
+            for spec in [SPECS['q6'], SPECS['q16']]:
+                t_arr, f_arr, data = generate_qscan(tdi_dict, channel, PIPE, event, resolution=RESOLUTION,
+                                    frange=spec['frange'], trange=spec['trange'], Q=spec['Q'])
+
+                QT[:, :, j] = data
+                t_axis[:, j] = t_arr
+                f_axis[:, j] = f_arr
+                j += 1
         
         images[i], t_axes[i], f_axes[i], tcen_vals[i] = QT, t_axis, f_axis, tcen
 

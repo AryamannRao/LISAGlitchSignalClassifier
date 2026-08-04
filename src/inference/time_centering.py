@@ -26,7 +26,7 @@ from torch.utils.data import random_split, DataLoader, Subset
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from tqdm import tqdm
 
-RESOLUTION, CHANNELS = 256, 2
+RESOLUTION, CHANNELS = 128, 4
 N_WORKERS, CHUNKSIZE = 6, 2
 TIME_STEP = 25
 
@@ -34,9 +34,9 @@ DEVICE = torch.device('mps')
 TRANSIENT_SIMPATHS = {1: gw_dataset_path, 2: glitch_dataset_path}
 TRANSIENT_RESULTPATHS = {1: gw_timecen_path, 2: glitch_timecen_path}
 
-RESULTS_DIR = TRAINING_RESULTS / 'run_010826_203219'
+RESULTS_DIR = TRAINING_RESULTS / 'run_020826_231155'
 DATASET_PATH = training_dataset_path
-WEIGHTS_PATH = RESULTS_DIR / 'model_weights.pth'
+WEIGHTS_PATH = RESULTS_DIR / 'best_model_weights.pth'
 
 def split_dataset(dataset, train_frac=0.7, val_frac=0.2):
     unique_indices = np.unique(dataset.sim_indices)
@@ -99,7 +99,7 @@ def evaluate_model(model, dataset):
 def run_one_sample(args):
     X, Y, Z = args
     tdi_dict = make_tdi_dict(X, Y, Z, whiten=False)
-    tcen_arr = np.linspace(-2.5, 2.5, TIME_STEP)*3600
+    tcen_arr = np.linspace(-3, 3, TIME_STEP)*3600
     
     images = np.zeros((len(tcen_arr), RESOLUTION, RESOLUTION, CHANNELS))
     t_axes = np.zeros((len(tcen_arr), RESOLUTION, CHANNELS))
@@ -111,13 +111,16 @@ def run_one_sample(args):
         QT = np.zeros((RESOLUTION, RESOLUTION, CHANNELS))
         t_axis = np.zeros((RESOLUTION, CHANNELS))
         f_axis = np.zeros((RESOLUTION, CHANNELS))
-        for j, spec in enumerate([SPECS['q6'], SPECS['q16']]):
-            t_arr, f_arr, data = generate_qscan(tdi_dict, 'A', PIPE, event, resolution=RESOLUTION,
-                                frange=spec['frange'], trange=spec['trange'], Q=spec['Q'])
+        j = 0
+        for channel in ['A', 'E']:
+            for spec in [SPECS['q6'], SPECS['q16']]:
+                t_arr, f_arr, data = generate_qscan(tdi_dict, channel, PIPE, event, resolution=RESOLUTION,
+                                    frange=spec['frange'], trange=spec['trange'], Q=spec['Q'])
 
-            QT[:, :, j] = data
-            t_axis[:, j] = t_arr
-            f_axis[:, j] = f_arr
+                QT[:, :, j] = data
+                t_axis[:, j] = t_arr
+                f_axis[:, j] = f_arr
+                j += 1
         
         images[i], t_axes[i], f_axes[i], tcen_vals[i] = QT, t_axis, f_axis, tcen
 
