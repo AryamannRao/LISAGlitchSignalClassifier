@@ -1,4 +1,6 @@
+# Generate Q-transform image stacks for noise-only dataset samples.
 import os
+# Limit numerical-library threading so each worker uses one CPU thread.
 os.environ["OMP_NUM_THREADS"] = "1"
 os.environ["MKL_NUM_THREADS"] = "1"
 os.environ["OPENBLAS_NUM_THREADS"] = "1"
@@ -23,15 +25,18 @@ from tqdm import tqdm
 
 FILE_PATH = empty_dataset_path
 
+# Image-stack dimensions and parallel processing settings.
 RESOLUTION = 128
 TIME_STEP = 5
 CHANNELS = 4
 N_WORKERS, CHUNKSIZE = 6, 2
 
 def run_one_sample(args):
+    # Convert one TDI sample into Q-scans at randomized time centres.
     X, Y, Z = args
     tdi_dict = make_tdi_dict(X, Y, Z, whiten=False)
     
+    # Draw offsets in hours, then express them in seconds for the Q-scan helper.
     tcen_arr = np.random.uniform(-3, 3, size=TIME_STEP)*3600
     
     images = np.zeros((len(tcen_arr), RESOLUTION, RESOLUTION, CHANNELS))
@@ -45,6 +50,7 @@ def run_one_sample(args):
         t_axis = np.zeros((RESOLUTION, CHANNELS))
         f_axis = np.zeros((RESOLUTION, CHANNELS))
 
+        # Use both A/E channels and two Q values to form four image channels.
         j = 0
         for channel in ['A', 'E']:
             for spec in [SPECS['q6'], SPECS['q16']]:
@@ -61,6 +67,7 @@ def run_one_sample(args):
     return images, t_axes, f_axes, tcen_vals
 
 def run_chunk(job_chunk):
+    # Process a group of samples while isolating individual failures.
     results = []
     for job in job_chunk:
         try:
@@ -71,14 +78,17 @@ def run_chunk(job_chunk):
     return results
 
 def chunkify(lst, chunksize):
+    # Yield fixed-size job groups for submission to the process pool.
     for i in range(0, len(lst), chunksize):
         yield lst[i:i + chunksize]
 
 def main():
+    # Add Q-transform stacks for every dataset signal not yet represented in the file.
     start = time.time()
 
     keys = ['QT', 't_qscan', 'f_qscan']
 
+    # Reuse the class HDF5 file and create image datasets only when absent.
     h5file = h5py.File(FILE_PATH, "r+")
     if keys[0] not in h5file:
         h5file.close()

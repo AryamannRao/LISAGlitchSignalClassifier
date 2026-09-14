@@ -1,4 +1,6 @@
+# Generate simulated instrumental-glitch samples for the glitch dataset class.
 import os
+# Limit numerical-library threading so each worker uses one CPU thread.
 os.environ["OMP_NUM_THREADS"] = "1"
 os.environ["MKL_NUM_THREADS"] = "1"
 os.environ["OPENBLAS_NUM_THREADS"] = "1"
@@ -25,6 +27,7 @@ from tqdm import tqdm
 
 @contextlib.contextmanager
 def suppress_output():
+    # Temporarily silence verbose simulator output within a worker process.
     with open(os.devnull, "w") as devnull:
         old_stdout = sys.stdout
         old_stderr = sys.stderr
@@ -37,17 +40,20 @@ def suppress_output():
             sys.stderr = old_stderr
 
 with h5py.File(orbits_path, 'r') as orb:
+    # Read the time span available in the precomputed orbit file.
     ORB_TO = orb.attrs['t0']
     ORB_SIZE = orb.attrs['size']
     ORB_DT = orb.attrs['dt']
 
 LOG_BETA_MIN, LOG_BETA_MAX = 0, np.log10(5e3)
+# Define the glitch-parameter sampling ranges in log space.
 LOG_AMP_MIN, LOG_AMP_MAX = -14, -11
 INJ_POINTS = ['tm_12', 'tm_23', 'tm_13',
               'tm_21', 'tm_32', 'tm_31']
 
 N_WORKERS, CHUNKSIZE = 6, 2
 
+# Switch between the smaller test set and the production dataset.
 TEST = False
 if TEST:
     FILE_PATH = glitch_testset_path
@@ -57,6 +63,7 @@ else:
     NSAMPLES = 80
 
 def run_one_sample(args):
+    # Construct, simulate, and transform one injected shapelet glitch.
     amp, beta, inj_point, t0, pipe = args
 
     pipe['t0'] = t0
@@ -83,6 +90,7 @@ def run_one_sample(args):
     return tdi_dict, amp, beta, inj_point, t0
 
 def run_chunk(job_chunk):
+    # Keep failures local to individual jobs within a worker chunk.
     results = []
     for job in job_chunk:
         try:
@@ -93,10 +101,12 @@ def run_chunk(job_chunk):
     return results
 
 def chunkify(lst, chunksize):
+    # Yield fixed-size job groups for submission to the process pool.
     for i in range(0, len(lst), chunksize):
         yield lst[i:i + chunksize]
 
 def get_filtered_params(nsamples, forest_path, lower, upper):
+    # Retain candidate log-parameters that the trained forest rates as usable.
     xmin, ymin = lower
     xmax, ymax = upper
 
@@ -114,6 +124,7 @@ def get_filtered_params(nsamples, forest_path, lower, upper):
     return samples
 
 def get_param_values(nsamples):
+    # Draw glitch parameters, injection points, and valid orbit start times.
     if TEST:
         beta_array = 10**np.random.uniform(LOG_BETA_MIN, LOG_BETA_MAX, size=nsamples)
         amp_array  = 10**np.random.uniform(LOG_AMP_MIN, LOG_AMP_MAX, size=nsamples)
@@ -130,6 +141,7 @@ def get_param_values(nsamples):
     return amp_array, beta_array, inj_point_array, t0_array
 
 def main():
+    # Create the output dataset and populate it with parallel simulations.
     start = time.time()
 
     amp_array, beta_array, inj_point_array, t0_array = get_param_values(NSAMPLES)
@@ -140,6 +152,7 @@ def main():
     #if os.path.exists(FILE_PATH):
      #   os.remove(FILE_PATH)
 
+    # Initialise the destination HDF5 structure before appending samples.
     h5file = create_glitch_dataset(FILE_PATH, PIPE['size'])
 
     print(f"Running with {N_WORKERS} workers")

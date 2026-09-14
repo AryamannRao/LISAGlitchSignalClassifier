@@ -1,3 +1,4 @@
+# Run a compact Optuna search over CNN width and learning rate.
 import sys
 from pathlib import Path
 import optuna
@@ -16,12 +17,14 @@ if str(SRC_ROOT) not in sys.path:
 from helpers.config import *
 
 DEVICE = torch.device('mps')
+# Build the fixed simulation-level dataset split used by every tuning trial.
 TRAIN, VAL, TEST = split_dataset(LISADataset(training_dataset_path))
 N_TRIALS = 10
 
 def pseudo_train(model, train_data, val_data,
                 learning_rate, batch_size,
                 num_epochs):
+    # Train a candidate briefly and return validation loss as its score.
     model.train()
     model = model.to(DEVICE)
     train_loader = DataLoader(train_data, batch_size=batch_size, shuffle=True)
@@ -46,6 +49,7 @@ def pseudo_train(model, train_data, val_data,
     return valid_loss
 
 def objective(trial):
+    # Sample hyperparameters, train a candidate, and report its validation loss.
     set_seed(42)
 
     lr = trial.suggest_float("lr", 1e-4, 1e-2, log=True)
@@ -60,6 +64,7 @@ def objective(trial):
     return valid_loss
 
 def main():
+    # Minimize validation loss across the configured number of Optuna trials.
     study = optuna.create_study(direction="minimize")
     optuna.logging.set_verbosity(optuna.logging.INFO)
     study.optimize(objective, n_trials=N_TRIALS)

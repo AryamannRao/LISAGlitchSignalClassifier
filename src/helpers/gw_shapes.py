@@ -1,3 +1,4 @@
+# Define gravitational-wave waveform objects used by the LISA response simulator.
 import numpy as np
 
 from scipy.interpolate import interp1d
@@ -7,6 +8,7 @@ from lisagwresponse import ResponseFromStrain
 import warnings
 warnings.filterwarnings("ignore")
 
+# Physical constants used by the inspiral-frequency calculation.
 C = 3e8
 G = 6.67e-11
 
@@ -15,6 +17,7 @@ class BinaryInspiralGW(ResponseFromStrain):
     """
     def __init__(self, m1, m2, d, t_inj, spin1=0.0, spin2=0.0, iota=0.0,
                 **kwargs,) -> None:
+        # Build a frequency-domain binary-merger waveform and convert it to time series.
         super().__init__(**kwargs)
         self.t_inj = float(t_inj)
         self.m1 = float(m1)
@@ -35,6 +38,7 @@ class BinaryInspiralGW(ResponseFromStrain):
         self.habs = np.array(np.sqrt(self.hp**2+self.hc**2))
 
     def compute_flower(self) -> float:
+        # Estimate the lower waveform frequency from the total binary mass.
         c = 3e8
         G = 6.67e-11
         M = (self.m1 + self.m2)*2e30
@@ -42,12 +46,15 @@ class BinaryInspiralGW(ResponseFromStrain):
         return (c**3)/(((6*r)**1.5)*np.pi*G*M)
 
     def compute_hplus(self, t) -> np.ndarray:
+        # Return the interpolated plus polarization on the requested time grid.
         return self.compute_signal(self.hp, t)
 
     def compute_hcross(self, t) -> np.ndarray:
+        # Return the interpolated cross polarization on the requested time grid.
         return self.compute_signal(self.hc, t)
 
     def compute_signal(self, h, t):
+        # Align the waveform peak with the injection time and interpolate it to `t`.
         h.start_time = 0
         i_peak = np.argmax(self.habs)
         peak_time = h.sample_times[i_peak]

@@ -1,4 +1,6 @@
+# Generate binary-inspiral gravitational-wave samples for the GW dataset class.
 import os
+# Limit numerical-library threading so each worker uses one CPU thread.
 os.environ["OMP_NUM_THREADS"] = "1"
 os.environ["MKL_NUM_THREADS"] = "1"
 os.environ["OPENBLAS_NUM_THREADS"] = "1"
@@ -27,6 +29,7 @@ from tqdm import tqdm
 
 @contextlib.contextmanager
 def suppress_output():
+    # Temporarily silence verbose simulator output within a worker process.
     with open(os.devnull, "w") as devnull:
         old_stdout = sys.stdout
         old_stderr = sys.stderr
@@ -39,11 +42,13 @@ def suppress_output():
             sys.stderr = old_stderr
 
 with h5py.File(orbits_path, 'r') as orb:
+    # Read the time span available in the precomputed orbit file.
     ORB_TO = orb.attrs['t0']
     ORB_SIZE = orb.attrs['size']
     ORB_DT = orb.attrs['dt']
 
 TEST = False
+# Choose test or production output size and destination.
 if TEST:
     FILE_PATH = gw_testset_path
     NSAMPLES = 500
@@ -52,6 +57,7 @@ else:
     NSAMPLES = 1000
 
 LOG_MASS_MIN, LOG_MASS_MAX = 4, 7
+# Bounds used when sampling source masses, distances, spins, and orientations.
 LOG_D_MIN, LOG_D_MAX = 3, 5
 Q_MIN, Q_MAX = 1, 5
 SPIN_MIN, SPIN_MAX = -0.99, 0.99
@@ -60,6 +66,7 @@ Z_MIN, Z_MAX = 0.5, 8
 N_WORKERS, CHUNKSIZE = 6, 2
 
 def run_one_sample(args):
+    # Construct, simulate, and transform one binary-inspiral injection.
     m1, m2, d, spin1, spin2, iota, gw_beta, gw_lambda, t0, pipe = args
 
     pipe['t0'] = t0
@@ -91,6 +98,7 @@ def run_one_sample(args):
     return tdi_dict, m1, m2, d, spin1, spin2, iota, gw_beta, gw_lambda, t0
 
 def run_chunk(job_chunk):
+    # Keep failures local to individual jobs within a worker chunk.
     results = []
     for job in job_chunk:
         try:
@@ -101,10 +109,12 @@ def run_chunk(job_chunk):
     return results
 
 def chunkify(lst, chunksize):
+    # Yield fixed-size job groups for submission to the process pool.
     for i in range(0, len(lst), chunksize):
         yield lst[i:i + chunksize]
 
 def get_filtered_params(nsamples, forest_path, lower, upper):
+    # Retain candidate log-parameters that the trained forest rates as usable.
     xmin, ymin = lower
     xmax, ymax = upper
 
@@ -122,6 +132,7 @@ def get_filtered_params(nsamples, forest_path, lower, upper):
     return samples
 
 def get_param_values(nsamples):
+    # Sample physically distributed source parameters and valid orbit start times.
     if TEST:
         Mc_array = 10**np.random.uniform(LOG_MASS_MIN, LOG_MASS_MAX, size=nsamples)
         d_array = 10**np.random.uniform(LOG_D_MIN, LOG_D_MAX, size=nsamples)
@@ -135,6 +146,7 @@ def get_param_values(nsamples):
 
     q_array = np.random.uniform(Q_MIN, Q_MAX, size=nsamples)
 
+    # Convert chirp mass and mass ratio into component masses.
     m1_array = Mc_array * ((1 + q_array)**(1/5) / q_array**(3/5))
     m2_array = m1_array * q_array
 
@@ -149,6 +161,7 @@ def get_param_values(nsamples):
     return m1_array, m2_array, d_array, spin1_array, spin2_array, iota_array, gw_beta_array, gw_lambda_array, t0_array
 
 def main():
+    # Create the output dataset and populate it with parallel simulations.
     start = time.time()
 
     m1_array, m2_array, d_array, spin1_array, spin2_array, iota_array,\
@@ -161,6 +174,7 @@ def main():
     #if os.path.exists(FILE_PATH):
      #   os.remove(FILE_PATH)
     
+    # Initialise the destination HDF5 structure before appending samples.
     h5file = create_gw_dataset(FILE_PATH, PIPE['size'])
 
     print(f"Running with {N_WORKERS} workers")

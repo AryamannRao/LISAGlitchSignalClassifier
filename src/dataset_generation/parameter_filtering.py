@@ -1,3 +1,4 @@
+# Train parameter-space filters from simulated test-set signal-to-noise content.
 import numpy as np
 import h5py
 
@@ -23,6 +24,7 @@ import warnings
 warnings.filterwarnings("ignore")
 
 TRANSIENT_TYPE = 'gw'
+# Select the dataset and expected number of detectable transient peaks.
 if TRANSIENT_TYPE == 'glitch':
     FILE_PATH = glitch_testset_path
     FOREST_PATH = glitch_forest_path
@@ -37,16 +39,19 @@ elif TRANSIENT_TYPE == 'mixed':
     TO_FIND = 2
 
 def filter_by_snr(dataset_path, to_find=1, threshold=8):
+    # Identify samples whose Q-transform has the requested number of SNR peaks.
     with h5py.File(dataset_path, 'r') as h5:
         t_qscan = h5['t_qscan'][:]
         f_qscan = h5['f_qscan'][:]
         qt = h5['QT'][:]
         tcen = h5['tcen'][:]
 
+    # Select each sample's Q-transform slice centred closest to zero time.
     idx = np.argmin(np.abs(tcen), axis=1)
     images = qt[np.arange(qt.shape[0]), idx]
     t_axes = t_qscan[np.arange(qt.shape[0]), idx]
     f_axes = f_qscan[np.arange(qt.shape[0]), idx]
+    # Convert normalized Q-transform amplitudes to SNR values.
     snrs = np.sqrt(images**2 - 1)
 
     good_idx = []
@@ -67,6 +72,7 @@ def filter_by_snr(dataset_path, to_find=1, threshold=8):
             continue
         try:
             times = np.linspace(np.min(t_axes[index])/3600, np.max(t_axes[index])/3600, 250)
+            # Detect distinct time clusters of threshold-crossing pixels.
             pdf = gaussian_kde(T_opt)(times)
             peaks, _ = find_peaks(pdf, width=1, prominence=0.05)
 
@@ -78,6 +84,7 @@ def filter_by_snr(dataset_path, to_find=1, threshold=8):
     return np.array(good_idx)
 
 def fit_random_forest(good_samples, bad_samples):
+    # Learn which two-dimensional log-parameter values produce useful samples.
     good_x, good_y = good_samples
     bad_x, bad_y = bad_samples
 
@@ -93,6 +100,7 @@ def fit_random_forest(good_samples, bad_samples):
     dump(clf, FOREST_PATH)
 
 def load_gw_testset():
+    # Load binary masses/distances and express chirp mass and distance in log space.
     with h5py.File(gw_testset_path, 'r') as h5:
         m1_arr = h5['m1'][:]
         m2_arr = h5['m2'][:]
@@ -102,6 +110,7 @@ def load_gw_testset():
     return np.log10(Mc_arr), np.log10(d_arr)
 
 def load_glitch_testset():
+    # Load glitch amplitude and width parameters in log space.
     with h5py.File(glitch_testset_path, 'r') as h5:
         amp_arr = h5['amp'][:]
         beta_arr = h5['beta'][:]
@@ -109,6 +118,7 @@ def load_glitch_testset():
     return np.log10(amp_arr), np.log10(beta_arr)
 
 def main():
+    # Label test-set parameters by detectability and train the selected filter.
     good_idx = filter_by_snr(FILE_PATH, to_find=TO_FIND, threshold=8)
 
     if TRANSIENT_TYPE == 'glitch':

@@ -1,4 +1,6 @@
+# Generate samples containing both a GW signal and an instrumental glitch.
 import os
+# Limit numerical-library threading so each worker uses one CPU thread.
 os.environ["OMP_NUM_THREADS"] = "1"
 os.environ["MKL_NUM_THREADS"] = "1"
 os.environ["OPENBLAS_NUM_THREADS"] = "1"
@@ -28,6 +30,7 @@ from tqdm import tqdm
 
 @contextlib.contextmanager
 def suppress_output():
+    # Temporarily silence verbose simulator output within a worker process.
     with open(os.devnull, "w") as devnull:
         old_stdout = sys.stdout
         old_stderr = sys.stderr
@@ -40,14 +43,17 @@ def suppress_output():
             sys.stderr = old_stderr
 
 with h5py.File(orbits_path, 'r') as orb:
+    # Read the time span available in the precomputed orbit file.
     ORB_TO = orb.attrs['t0']
     ORB_SIZE = orb.attrs['size']
     ORB_DT = orb.attrs['dt']
 
 NSAMPLES = 2000
+# Destination for the mixed-class training samples.
 FILE_PATH = mixed_dataset_path
 
 LOG_MASS_MIN, LOG_MASS_MAX = 4, 7
+# Parameter bounds for the GW and glitch populations.
 Q_MIN, Q_MAX = 1, 5
 LOG_D_MIN, LOG_D_MAX = 3, 5
 SPIN_MIN, SPIN_MAX = -0.99, 0.99
@@ -58,17 +64,21 @@ INJ_POINTS = ['tm_12', 'tm_23', 'tm_13',
               'tm_21', 'tm_32', 'tm_31']
 
 SEP_MIN, SEP_MAX = 0, 2.5
+# Maximum absolute separation, in hours, between the two injections.
 
 N_WORKERS, CHUNKSIZE = 6, 2
 
 def set_seed(seed):
+    # Make parameter draws reproducible for this generator.
     np.random.seed(seed)
 
 def run_one_sample(args):
+    # Construct, simulate, and transform one GW-plus-glitch injection pair.
     m1, m2, d, spin1, spin2, iota, gw_beta, gw_lambda,\
           amp, beta, inj_point, sep, t0, pipe = args
 
     pipe['t0'] = t0
+    # Offset the GW and glitch symmetrically around the nominal injection time.
     gws = [{'type': 'BinaryInspiralGW',
         'm1': m1, 'm2': m2, 'd': d,
         'spin1': spin1, 'spin2': spin2, 'iota': iota,
@@ -100,6 +110,7 @@ def run_one_sample(args):
         gw_beta, gw_lambda, amp, beta, inj_point, sep, t0
 
 def run_chunk(job_chunk):
+    # Keep failures local to individual jobs within a worker chunk.
     results = []
     for job in job_chunk:
         try:
@@ -110,10 +121,12 @@ def run_chunk(job_chunk):
     return results
 
 def chunkify(lst, chunksize):
+    # Yield fixed-size job groups for submission to the process pool.
     for i in range(0, len(lst), chunksize):
         yield lst[i:i + chunksize]
 
 def get_filtered_params(nsamples, forest_path, lower, upper):
+    # Retain candidate log-parameters that the trained forest rates as usable.
     xmin, ymin = lower
     xmax, ymax = upper
 
@@ -131,6 +144,7 @@ def get_filtered_params(nsamples, forest_path, lower, upper):
     return samples
 
 def get_param_values(nsamples):
+    # Draw valid GW/glitch parameters, relative timing, and orbit start times.
     """Mc_array = 10**np.random.uniform(LOG_MASS_MIN, LOG_MASS_MAX, size=nsamples)
     d_array = 10**np.random.uniform(LOG_D_MIN, LOG_D_MAX, size=nsamples)
     beta_array = 10**np.random.uniform(LOG_BETA_MIN, LOG_BETA_MAX, size=nsamples)
@@ -150,6 +164,7 @@ def get_param_values(nsamples):
 
     q_array = np.random.uniform(Q_MIN, Q_MAX, size=nsamples)
     
+    # Convert chirp mass and mass ratio into component masses.
     m1_array = Mc_array * ((1 + q_array)**(1/5) / q_array**(3/5))
     m2_array = m1_array * q_array
 
@@ -162,6 +177,7 @@ def get_param_values(nsamples):
 
     inj_point_array = np.random.choice(INJ_POINTS, nsamples)
 
+    # Randomise which transient occurs first as well as their separation.
     sep_array = np.random.choice([-1, 1], size=nsamples)*np.random.uniform(SEP_MIN, SEP_MAX, size=nsamples)
     t0_array = ORB_TO + np.random.uniform(0.01, 0.99, size=nsamples)*ORB_SIZE*ORB_DT
 
@@ -170,6 +186,7 @@ def get_param_values(nsamples):
             amp_array, beta_array, inj_point_array, sep_array, t0_array
 
 def main():
+    # Seed sampling, create the output dataset, and run parallel simulations.
     start = time.time()
     set_seed(42)
     m1_array, m2_array, d_array, spin1_array, spin2_array, iota_array, gw_beta_array, gw_lambda_array,\
@@ -184,6 +201,7 @@ def main():
     #if os.path.exists(mixed_dataset_path):
      #   os.remove(mixed_dataset_path)
     
+    # Initialise the destination HDF5 structure before appending samples.
     h5file = create_mixed_dataset(FILE_PATH, PIPE['size'])
 
     print(f"Running with {N_WORKERS} workers")

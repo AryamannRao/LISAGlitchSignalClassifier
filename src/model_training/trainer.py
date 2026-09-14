@@ -1,3 +1,4 @@
+# Train, evaluate, and plot the CNN transient classifier.
 import os
 import time
 import numpy as np
@@ -18,6 +19,7 @@ from torch.utils.data import random_split, DataLoader, Subset
 from model import CNN, LISADataset
 from helpers.config import *
 
+# Dataset source and timestamped directory for model artifacts.
 DATASET_PATH = training_dataset_path
 
 SAVE_DIR = TRAINING_RESULTS / f'run_{datetime.now().strftime("%d%m%y_%H%M%S")}'
@@ -31,6 +33,7 @@ NUM_EPOCHS = 5
 DROP = 0.0
 PLOT_EVERY = 33"""
 
+# Load tunable training settings from the shared configuration.
 WIDTH = MODEL_PARAMS['width']
 USE_BATCH_NORM = MODEL_PARAMS['bn']
 NORMALISE = MODEL_PARAMS['normalise']
@@ -44,10 +47,12 @@ DATASET_SEED, NUMPY_SEED = 42, 42
 DEVICE = torch.device('mps')
 
 def set_seed(seed=42):
+    # Seed PyTorch and NumPy randomness for reproducible training runs.
     torch.manual_seed(seed)
     np.random.seed(seed)
 
 def split_dataset(dataset, train_frac=0.7, val_frac=0.2):
+    # Split by simulation ID so related time-centred images stay in one subset.
     unique_indices = np.unique(dataset.sim_indices)
     all_indices = np.array(dataset.sim_indices)
 
@@ -73,6 +78,7 @@ def split_dataset(dataset, train_frac=0.7, val_frac=0.2):
     return train_dataset, val_dataset, test_dataset
 
 def accuracy(model, loader, threshold=0.5):
+    # Compute per-label (soft) and all-labels-correct (hard) accuracy.
     model.eval()
     
     soft_correct, hard_correct, soft_total, hard_total = 0, 0, 0, 0
@@ -92,6 +98,7 @@ def accuracy(model, loader, threshold=0.5):
     return soft_acc, hard_acc
 
 def compute_loss(model, loader, criterion):
+    # Evaluate the mean loss across a validation or test data loader.
     model.eval()
     loss = 0.0
     count = 0
@@ -107,6 +114,7 @@ def compute_loss(model, loader, criterion):
 def train_model(model, train_data, val_data, test_data,
                 learning_rate=0.005, batch_size=10,
                 num_epochs=10, plot_every=10):
+    # Train the CNN, checkpoint the lowest-loss batch, and evaluate final accuracy.
     model = model.to(DEVICE)
     train_loader = DataLoader(train_data, batch_size=batch_size, shuffle=True)
     
@@ -117,6 +125,7 @@ def train_model(model, train_data, val_data, test_data,
     #val_subset = Subset(val_data, indices)
     val_loader = DataLoader(val_data, batch_size=batch_size)
     
+    # Use independent binary targets for GW and glitch presence.
     criterion = torch.nn.BCEWithLogitsLoss()
     optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate, weight_decay=1e-4)
 
@@ -168,6 +177,7 @@ def train_model(model, train_data, val_data, test_data,
          val_soft_acc, val_hard_acc, test_soft_acc, test_hard_acc
 
 def plot_results(results):
+    # Save the training/validation loss curve and final accuracy summary.
     iters, train_loss, valid_loss,\
          val_soft_acc, val_hard_acc, test_soft_acc, test_hard_acc = results
 
@@ -189,6 +199,7 @@ def plot_results(results):
     plt.savefig(SAVE_DIR / 'training_curves.png')
 
 def main():
+    # Set up the run, train the model, and persist weights, metrics, and plot.
     set_seed(NUMPY_SEED)
 
     model = CNN(width=WIDTH, bn=USE_BATCH_NORM, normalise=NORMALISE, drop=DROP)

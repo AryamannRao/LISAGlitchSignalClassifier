@@ -1,3 +1,4 @@
+# Create and append the HDF5 datasets used throughout the project.
 import os
 import sys
 import h5py
@@ -11,10 +12,12 @@ from helpers.simulation import chirp_mass
 from helpers.config import *
 
 def create_gw_dataset(dataset_path, siglen):
+    # Create (or reopen) an extendable dataset for GW TDI channels and parameters.
     #H, W = resolution
 
     if not os.path.exists(dataset_path):
         h5file = h5py.File(dataset_path, "w")
+        # Store each TDI channel as compressed fixed-length signal rows.
         h5file.create_dataset(
             "X", 
             shape=(0, siglen),
@@ -41,6 +44,7 @@ def create_gw_dataset(dataset_path, siglen):
             compression="gzip",
         )
 
+        # Persist source parameters alongside each simulated signal.
         h5file.create_dataset(
             "m1",   shape=(0,), maxshape=(None,), dtype="float32"
         )
@@ -74,12 +78,14 @@ def create_gw_dataset(dataset_path, siglen):
     return h5file
 
 def append_gw_sample(h5, tdi_dict, m1, m2, d, spin1, spin2, iota, gw_beta, gw_lambda, t0):
+    # Append a GW TDI batch and its associated source parameters.
     X = tdi_dict["X"]
     Y = tdi_dict["Y"]
     Z = tdi_dict["Z"]
 
     n = h5["X"].shape[0]  # current length
 
+    # Normalize scalar samples and batches to the same appendable shapes.
     X = np.atleast_2d(X)
     Y = np.atleast_2d(Y)
     Z = np.atleast_2d(Z)
@@ -131,8 +137,10 @@ def append_gw_sample(h5, tdi_dict, m1, m2, d, spin1, spin2, iota, gw_beta, gw_la
     h5["t0"][n:new_n] = t0
 
 def create_glitch_dataset(dataset_path, siglen):
+    # Create (or reopen) an extendable dataset for glitch TDI channels and metadata.
     if not os.path.exists(dataset_path):
         h5file = h5py.File(dataset_path, "w")
+        # Store each TDI channel as compressed fixed-length signal rows.
         h5file.create_dataset(
             "X", 
             shape=(0, siglen),
@@ -159,6 +167,7 @@ def create_glitch_dataset(dataset_path, siglen):
             compression="gzip",
         )
 
+        # Persist glitch amplitude, width, location, and simulation time.
         h5file.create_dataset(
             "amp",   shape=(0,), maxshape=(None,), dtype="float32"
         )
@@ -178,12 +187,14 @@ def create_glitch_dataset(dataset_path, siglen):
     return h5file
 
 def append_glitch_sample(h5, tdi_dict, amp, beta, inj_point, t0):
+    # Append a glitch TDI batch and its associated injection parameters.
     X = tdi_dict["X"]
     Y = tdi_dict["Y"]
     Z = tdi_dict["Z"]
 
     n = h5["X"].shape[0]  # current length
 
+    # Normalize scalar samples and batches to the same appendable shapes.
     X = np.atleast_2d(X)
     Y = np.atleast_2d(Y)
     Z = np.atleast_2d(Z)
@@ -220,8 +231,10 @@ def append_glitch_sample(h5, tdi_dict, amp, beta, inj_point, t0):
     h5["t0"][n:new_n] = t0
 
 def create_mixed_dataset(dataset_path, siglen):
+    # Create (or reopen) an extendable dataset containing GW and glitch metadata.
     if not os.path.exists(dataset_path):
         h5file = h5py.File(dataset_path, "w")
+        # Store each TDI channel as compressed fixed-length signal rows.
         h5file.create_dataset(
             "X", 
             shape=(0, siglen),
@@ -296,12 +309,14 @@ def create_mixed_dataset(dataset_path, siglen):
 
 def append_mixed_sample(h5, tdi_dict, m1, m2, d, spin1, spin2, iota, gw_beta, gw_lambda,
                         amp, beta, inj_point, sep, t0):
+    # Append a mixed-signal TDI batch together with both sets of parameters.
     X = tdi_dict["X"]
     Y = tdi_dict["Y"]
     Z = tdi_dict["Z"]
 
     n = h5["X"].shape[0]  # current length
 
+    # Normalize scalar samples and batches to the same appendable shapes.
     X = np.atleast_2d(X)
     Y = np.atleast_2d(Y)
     Z = np.atleast_2d(Z)
@@ -365,8 +380,10 @@ def append_mixed_sample(h5, tdi_dict, m1, m2, d, spin1, spin2, iota, gw_beta, gw
     h5["t0"][n:new_n] = t0
 
 def create_empty_dataset(dataset_path, siglen):
+    # Create (or reopen) an extendable dataset for noise-only TDI samples.
     if not os.path.exists(dataset_path):
         h5file = h5py.File(dataset_path, "w")
+        # Store each TDI channel as compressed fixed-length signal rows.
         h5file.create_dataset(
             "X", 
             shape=(0, siglen),
@@ -401,6 +418,7 @@ def create_empty_dataset(dataset_path, siglen):
     return h5file
 
 def append_empty_sample(h5, tdi_dict, t0):
+    # Append a noise-only TDI batch and its simulation start time.
 
     X = tdi_dict["X"]
     Y = tdi_dict["Y"]
@@ -408,6 +426,7 @@ def append_empty_sample(h5, tdi_dict, t0):
 
     n = h5["X"].shape[0]  # current length
 
+    # Normalize scalar samples and batches to the same appendable shapes.
     X = np.atleast_2d(X)
     Y = np.atleast_2d(Y)
     Z = np.atleast_2d(Z)
@@ -432,6 +451,7 @@ def append_empty_sample(h5, tdi_dict, t0):
     h5["t0"][n:new_n] = t0
 
 def create_imageset(dataset_path, time_steps, resolution, channels, keys):
+    # Add extendable Q-transform image, time-axis, frequency-axis, and centre datasets.
     image_key, tarr_key, farr_key = keys
     h5file = h5py.File(dataset_path, "a")
 
@@ -460,9 +480,11 @@ def create_imageset(dataset_path, time_steps, resolution, channels, keys):
     return h5file
 
 def append_image(h5, image, t_arr, f_arr, tcen, keys):
+    # Append one image batch and its matching coordinate arrays.
     image_key, tarr_key, farr_key = keys
     n = h5[image_key].shape[0]  # current length
 
+    # Promote individual samples to batches before resizing the datasets.
     if image.ndim == 4:
         image = np.expand_dims(image, axis=0)
     if t_arr.ndim == 3:

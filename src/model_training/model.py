@@ -1,3 +1,4 @@
+# Define the CNN classifier and its HDF5-backed PyTorch dataset wrapper.
 import torch
 import torch.nn as nn
 from torch.utils.data import Dataset
@@ -6,12 +7,13 @@ import numpy as np
 
 class CNN(nn.Module):
     def __init__(self, width=4, bn=True, normalise=False, drop=0.0):
-        
+        # Configure a four-block convolutional classifier with two output logits.
         super(CNN, self).__init__()
         self.width = width
         self.bn = bn
         self.norm = normalise
         self.drop = drop
+        # Progressively expand feature depth while preserving spatial dimensions.
         self.conv1 = nn.Conv2d(in_channels=4,
                                out_channels=self.width,
                                kernel_size=3,
@@ -29,6 +31,7 @@ class CNN(nn.Module):
                                kernel_size=3,
                                padding=1)
         
+        # Add optional batch normalization after each pooled convolution block.
         if bn:
             self.bn1 = nn.BatchNorm2d(self.width)
             self.bn2 = nn.BatchNorm2d(self.width*2)
@@ -41,6 +44,7 @@ class CNN(nn.Module):
         self.fc2 = nn.Linear(100, 2)
 
     def forward(self, x):
+        # Normalize per image when requested, then classify its four Q-scan channels.
         if self.norm:
             mean = x.mean(dim=(1, 2, 3), keepdim=True)
             std = x.std(dim=(1, 2, 3), keepdim=True)
@@ -57,6 +61,7 @@ class CNN(nn.Module):
         x = self.pool(torch.relu(self.conv4(x)))
         if self.bn:
             x = self.bn4(x)
+        # Flatten the final 8×8 feature maps before the classifier layers.
         x = x.view(-1, self.width * 8 * 8 * 8)
         x = torch.relu(self.fc1(x))
         x = self.dropout(x)
@@ -64,7 +69,7 @@ class CNN(nn.Module):
     
 class LISADataset(Dataset):
     def __init__(self, h5_path):
-        
+        # Keep HDF5 datasets open for on-demand image and metadata access.
         self.file = h5py.File(h5_path, "r")
         
         self.images = self.file["images"]
@@ -73,23 +78,24 @@ class LISADataset(Dataset):
         self.time_indices = self.file["time_index"]
         
     def __len__(self):
+        # Report the number of flattened Q-transform images.
         return len(self.images)
     
     def __getitem__(self, idx):
-        
+        # Retrieve one image, its multi-label target, and source/time identifiers.
         image = self.images[idx]
         label = self.labels[idx]
         sim_idx = self.sim_indices[idx]
         time_idx = self.time_indices[idx]
         
-        # convert to float32
+        # Convert stored values to model-compatible floating-point arrays.
         image = image.astype(np.float32)
         label = label.astype(np.float32)
         
-        # convert HWC → CHW
+        # Reorder images from HWC storage layout to PyTorch's CHW layout.
         image = np.transpose(image, (2,0,1))
         
-        # convert to torch tensor
+        # Convert NumPy arrays into tensors for DataLoader batching.
         image = torch.from_numpy(image)
         label = torch.from_numpy(label)
         

@@ -1,7 +1,9 @@
+# Centralise project paths and shared simulation/model configuration.
 from pathlib import Path
 import numpy as np
 import h5py
 
+# Derive all paths from the repository root rather than the working directory.
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 
 SRC = PROJECT_ROOT / 'src'
@@ -12,12 +14,14 @@ INFERENCE = DIST / 'inference'
 PSD_PATH = DIST / 'psd_estimates'
 FIGURES = DIST / 'figures'
 
+# Define class-specific dataset locations.
 GW_DATASETS = TRAINING_DATASETS / 'gw_datasets'
 GLITCH_DATASETS = TRAINING_DATASETS / 'glitch_datasets'
 MIXED_DATASETS = TRAINING_DATASETS / 'mixed_datasets'
 EMPTY_DATASETS = TRAINING_DATASETS / 'empty_datasets'
 LPF_DATASETS = INFERENCE / 'lpf_datasets'
 
+# Standard input/output file paths used by the generation and inference scripts.
 orbits_path = str(DIST/ 'orbits' / 'orbits.h5')
 simulation_path = str(DIST / 'default_simulation_output.h5')
 glitch_path = str(DIST / 'default_glitch_output.h5')
@@ -27,6 +31,7 @@ lpf_library_path = str(LPF_DATASETS / 'lpf-glitch-library.h5')
 lpf_ord_param_path = str(LPF_DATASETS / 'glitch_params_ordinary.txt')
 lpf_cold_param_path = str(LPF_DATASETS / 'glitch_params_cold.txt')
 
+# Training and test dataset destinations for each signal class.
 glitch_dataset_path = str(GLITCH_DATASETS / 'glitch_dataset.h5')
 gw_dataset_path = str(GW_DATASETS / 'gw_dataset.h5')
 mixed_dataset_path = str(MIXED_DATASETS / 'mixed_dataset.h5')
@@ -38,19 +43,23 @@ gw_testset_path = str(GW_DATASETS / 'gw_testset.h5')
 mixed_testset_path = str(MIXED_DATASETS / 'mixed_testset.h5')
 empty_testset_path = str(EMPTY_DATASETS / 'empty_testset.h5')
 
+# Random-forest filters used to select viable injection parameters.
 glitch_forest_path = str(GLITCH_DATASETS / 'glitch_random_forest.joblib')
 gw_forest_path = str(GW_DATASETS / 'gw_random_forest.joblib')
 mixed_forest_path = str(MIXED_DATASETS / 'mixed_random_forest.joblib')
 
+# Paths for transient time-centering inference inputs and results.
 glitch_timecen_path = str(INFERENCE / 'time_centering' / 'glitch_timecen.h5')
 gw_timecen_path = str(INFERENCE / 'time_centering' / 'gw_timecen.h5')
 timecen_result_path = str(INFERENCE / 'time_centering' / 'inference_results.npz')
 
 with h5py.File(orbits_path, 'r') as orb:
+    # Use the midpoint of the available orbit ephemeris as the default start time.
     orb_t0 = orb.attrs['t0']
     orb_size = orb.attrs['size']
     orb_dt = orb.attrs['dt']
 
+# Shared simulation, Q-transform, and neural-network settings.
 PIPE = {'t0': orb_t0 + orb_size*orb_dt/2, 'dt': 1,'size': int(10 * 3600 / 1),
         't_inj': 5 * 3600, 'keep_noises': ['test-mass', 'oms']}
 SPECS = {'q16': {'trange':(-3, 3), 'frange':(1e-4, 1e-1), 'Q':16},

@@ -1,4 +1,6 @@
+# Generate noise-only TDI samples for the empty dataset class.
 import os
+# Limit numerical-library threading so each worker uses one CPU thread.
 os.environ["OMP_NUM_THREADS"] = "1"
 os.environ["MKL_NUM_THREADS"] = "1"
 os.environ["OPENBLAS_NUM_THREADS"] = "1"
@@ -23,6 +25,7 @@ from tqdm import tqdm
 
 @contextlib.contextmanager
 def suppress_output():
+    # Temporarily silence verbose simulator output within a worker process.
     with open(os.devnull, "w") as devnull:
         old_stdout = sys.stdout
         old_stderr = sys.stderr
@@ -35,14 +38,17 @@ def suppress_output():
             sys.stderr = old_stderr
 
 with h5py.File(orbits_path, 'r') as orb:
+    # Read the time span available in the precomputed orbit file.
     ORB_TO = orb.attrs['t0']
     ORB_SIZE = orb.attrs['size']
     ORB_DT = orb.attrs['dt']
 
 NSAMPLES = 500
+# Process several independent simulations concurrently, two at a time per job.
 N_WORKERS, CHUNKSIZE = 6, 2
 
 def run_one_sample(args):
+    # Run one noise-only simulation at a randomly chosen orbit start time.
     t0, pipe = args
     gws, glitches = [], []
     pipe['t0'] = t0
@@ -65,6 +71,7 @@ def run_one_sample(args):
     return tdi_dict, t0
 
 def run_chunk(job_chunk):
+    # Isolate per-sample failures so a failed simulation does not stop a chunk.
     results = []
     for job in job_chunk:
         try:
@@ -75,18 +82,22 @@ def run_chunk(job_chunk):
     return results
 
 def chunkify(lst, chunksize):
+    # Yield fixed-size job groups for submission to the process pool.
     for i in range(0, len(lst), chunksize):
         yield lst[i:i + chunksize]
 
 def main():
+    # Sample valid orbit offsets, execute simulations, and write their TDI data.
     start = time.time()
 
+    # Keep start times away from the orbit-file boundaries.
     t0_array = ORB_TO + np.random.uniform(0.01, 0.99, size=NSAMPLES)*ORB_SIZE*ORB_DT
     jobs = [(t0, PIPE) for t0 in t0_array]
     
     #if os.path.exists(empty_dataset_path):
      #   os.remove(empty_dataset_path)
 
+    # Initialise the destination HDF5 structure before appending samples.
     h5file = create_empty_dataset(empty_dataset_path, PIPE['size'])
 
     print(f"Running with {N_WORKERS} workers")

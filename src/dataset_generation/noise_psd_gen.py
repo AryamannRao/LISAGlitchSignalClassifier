@@ -1,3 +1,4 @@
+# Estimate and save noise power spectral densities for the TDI channels.
 import sys
 from pathlib import Path
 
@@ -12,7 +13,7 @@ from helpers.config import *
 from helpers.simulation import *
 
 def estimate_psd(data, sample_freq, nperseg, noverlap=None):
-    
+    # Use Welch's method with a Hann window to estimate a one-sided PSD.
     f_psd, psd = welch(
         data,
         fs=sample_freq,
@@ -26,6 +27,7 @@ def estimate_psd(data, sample_freq, nperseg, noverlap=None):
     return f_psd, psd
 
 def main():
+    # Simulate noise only, derive A/E/T channels, and save a PSD per channel.
     glitches, gws = [], []
     
     run_simulation(gws, glitches, PIPE,
@@ -34,6 +36,7 @@ def main():
                    disable_noise=PIPE['keep_noises'])
     tdi_dict = run_tdi(simulation_path, PIPE)
 
+    # Read the first-generation TDI channels and form their orthogonal combinations.
     X, Y, Z = tdi_dict['X'].value, tdi_dict['Y'].value, tdi_dict['Z'].value
     A = (Z - X)/np.sqrt(2)
     E = (X - 2*Y + Z)/np.sqrt(6)
@@ -42,6 +45,7 @@ def main():
     channels = [X, Y, Z, A, E, T]
     channel_names = ['X', 'Y', 'Z', 'A', 'E', 'T']
 
+    # Create the output directory the first time PSDs are generated.
     if os.path.exists(PSD_PATH) == False:
         os.makedirs(PSD_PATH)
     for i, channel in enumerate(channels):

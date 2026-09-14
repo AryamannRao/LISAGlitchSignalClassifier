@@ -1,4 +1,6 @@
+# Evaluate trained classifications as a function of Q-scan time centring.
 import os
+# Limit numerical-library threading so each worker uses one CPU thread.
 os.environ["OMP_NUM_THREADS"] = "1"
 os.environ["MKL_NUM_THREADS"] = "1"
 os.environ["OPENBLAS_NUM_THREADS"] = "1"
@@ -27,10 +29,12 @@ from concurrent.futures import ProcessPoolExecutor, as_completed
 from tqdm import tqdm
 
 RESOLUTION, CHANNELS = 128, 4
+# Inference image-stack dimensions and parallel processing settings.
 N_WORKERS, CHUNKSIZE = 6, 2
 TIME_STEP = 25
 
 DEVICE = torch.device('mps')
+# Map the model's binary-label class values to source and result files.
 TRANSIENT_SIMPATHS = {1: gw_dataset_path, 2: glitch_dataset_path}
 TRANSIENT_RESULTPATHS = {1: gw_timecen_path, 2: glitch_timecen_path}
 
@@ -39,6 +43,7 @@ DATASET_PATH = training_dataset_path
 WEIGHTS_PATH = RESULTS_DIR / 'best_model_weights.pth'
 
 def split_dataset(dataset, train_frac=0.7, val_frac=0.2):
+    # Split by simulation identifier to prevent image stacks leaking across subsets.
     unique_indices = np.unique(dataset.sim_indices)
     all_indices = np.array(dataset.sim_indices)
 
@@ -64,6 +69,7 @@ def split_dataset(dataset, train_frac=0.7, val_frac=0.2):
     return train_dataset, val_dataset, test_dataset
 
 def load_best_model(weights_path, model_params):
+    # Recreate the configured CNN and load its saved best checkpoint for inference.
     model = CNN(width=model_params['width'], normalise=model_params['normalise'],\
                  bn=model_params['bn'], drop=model_params['drop'])
     model.load_state_dict(torch.load(weights_path, map_location=DEVICE))
@@ -72,6 +78,7 @@ def load_best_model(weights_path, model_params):
     return model
 
 def evaluate_model(model, dataset):
+    # Return predicted and true binary-encoded class values for a dataset subset.
     loader = DataLoader(dataset, batch_size=64)
 
     all_preds = []
@@ -92,13 +99,16 @@ def evaluate_model(model, dataset):
     preds = torch.cat(all_preds)
     labels = torch.cat(all_labels)
 
+    # Encode two independent classifier outputs as GW=1, glitch=2, mixed=3.
     pred_class = preds[:,0]*1 + preds[:,1]*2
     true_class = labels[:,0]*1 + labels[:,1]*2
     return pred_class.numpy(), true_class.numpy()
 
 def run_one_sample(args):
+    # Generate a regularly centred Q-scan sequence for one selected simulation.
     X, Y, Z = args
     tdi_dict = make_tdi_dict(X, Y, Z, whiten=False)
+    # Sweep evenly through the ±3-hour time-centre range.
     tcen_arr = np.linspace(-3, 3, TIME_STEP)*3600
     
     images = np.zeros((len(tcen_arr), RESOLUTION, RESOLUTION, CHANNELS))
@@ -127,6 +137,7 @@ def run_one_sample(args):
     return images, t_axes, f_axes, tcen_vals
 
 def run_chunk(job_chunk):
+    # Process a group of simulations while isolating individual failures.
     results = []
     for job in job_chunk:
         try:
@@ -137,16 +148,19 @@ def run_chunk(job_chunk):
     return results
 
 def chunkify(lst, chunksize):
+    # Yield fixed-size job groups for submission to the process pool.
     for i in range(0, len(lst), chunksize):
         yield lst[i:i + chunksize]
 
 def create_inference_set(model, transient_type, keys=['QT', 't_qscan', 'f_qscan', 'tcen']):
+    # Create Q-scan sequences from correctly classified test simulations of one class.
     dataset = LISADataset(DATASET_PATH)
     _, _, test_dataset = split_dataset(dataset)
 
     pred_class, true_class = evaluate_model(model, test_dataset)
     print('Evaluation complete...')
 
+    # Keep only examples whose predicted class matches the requested true class.
     correct = np.where((true_class == transient_type) & (pred_class == transient_type))[0]
     sim_indices = np.array([test_dataset[i][2] for i in correct])
     sim_indices = np.unique(sim_indices)
@@ -189,6 +203,7 @@ def create_inference_set(model, transient_type, keys=['QT', 't_qscan', 'f_qscan'
     h5file.close()
 
 def run_inference(model):
+    # Measure mean classifier responses and variation at each scan-centre offset.
     with h5py.File(gw_timecen_path, 'r') as f:
         gws = f['QT'][:]
     with h5py.File(glitch_timecen_path, 'r') as f:
@@ -196,6 +211,7 @@ def run_inference(model):
         tcen_vals = f['tcen'][:]
 
     gw_acc, glitch_acc, gw_std, glitch_std = [], [], [], []
+    # Evaluate each time slice without computing gradients.
     with torch.no_grad():
         for i in range(TIME_STEP):
             gw_images = torch.tensor(gws[:, i, :, :, :],\
@@ -218,6 +234,7 @@ def run_inference(model):
     return tcen_vals[0,:], gw_acc, glitch_acc, gw_std, glitch_std
 
 def main():
+    # Build missing inference image sets, then save time-dependent model responses.
     model = load_best_model(WEIGHTS_PATH, MODEL_PARAMS)
 
     if not os.path.exists(gw_timecen_path):

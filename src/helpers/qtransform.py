@@ -1,9 +1,11 @@
+# Build Q-transform time-frequency representations for TDI signals.
 import numpy as np
 from scipy.interpolate import interp1d, RectBivariateSpline
 from gwpy.timeseries import TimeSeries
 
 
 def generate_ft_arr(frange, trange, Q):
+    # Create Q-dependent frequency bins and their corresponding time samples.
     fmin, fmax = frange
     tmin, tmax = trange
     
@@ -25,7 +27,7 @@ def generate_ft_arr(frange, trange, Q):
     return f_arr, t_arr
 
 def q_transform(times, signal, Q, frange, trange, resolution):
-    
+    # Compute a normalized constant-Q transform and resample it to a square grid.
     f_arr, t_arr = generate_ft_arr(frange, trange, Q)
 
     QT = []
@@ -33,6 +35,7 @@ def q_transform(times, signal, Q, frange, trange, resolution):
         t_slice = t_arr[i]
         out_slice = []
         for t in t_slice:
+            # Set the Gaussian window duration for this frequency and Q value.
             tau = Q/(np.sqrt(2)*np.pi*f)
             
             seg = np.where((times > t - 4*tau) & (times < t + 4*tau))[0]
@@ -50,12 +53,14 @@ def q_transform(times, signal, Q, frange, trange, resolution):
         QT.append(f(t_arr[-1]))
 
     QT = np.array(QT)
+    # Normalize each frequency row by its median power.
     QT /= np.median(QT, axis=1, keepdims=True)
     QT *= np.log(2)
     
     f_new = np.logspace(np.log10(np.min(f_arr)), np.log10(np.max(f_arr)), resolution, endpoint=True)
     t_new = np.linspace(np.min(t_arr[-1]), np.max(t_arr[-1]), resolution, endpoint=True)
     
+    # Interpolate irregular constant-Q samples onto a common image grid.
     cubicspline = RectBivariateSpline(f_arr, t_arr[-1], QT, kx=3, ky=3)
     QTnew = cubicspline(f_new, t_new)
     QTnew = np.clip(QTnew, 1e-12, None)
@@ -64,12 +69,14 @@ def q_transform(times, signal, Q, frange, trange, resolution):
 
 def generate_qscan(tdi_dict, channel, pipe, event, 
                    frange, trange, Q, resolution):
+    # Crop a TDI channel around an event and return its Q-transform image.
 
     signal = TimeSeries(tdi_dict[channel], dt=pipe['dt'], t0=0)
     
     time_secs = signal.times.value
     time_hrs = time_secs/3600
     
+    # Select the time window requested around the event location.
     index = np.where((time_hrs <= event/3600 + trange[1]) & (time_hrs >= event/3600 + trange[0]))[0]
     sigslice = signal[index].value
     timeslice = signal[index].times.value
