@@ -9,7 +9,7 @@ SRC_ROOT = Path(__file__).resolve().parent.parent
 if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
-from helpers.gw_shapes import BinaryInspiralGW
+from helpers.gw_shapes import SMBHB
 from scipy.signal.windows import tukey
 from pytdi.michelson import X2, Y2, Z2
 from gwpy.timeseries import TimeSeries, TimeSeriesDict
@@ -24,8 +24,8 @@ def create_gws(gws, pipe, gw_path, orbits_path):
     if os.path.exists(gw_path):
         os.remove(gw_path)
     for gw in gws:
-        if gw['type'] == 'BinaryInspiralGW':
-            gw = BinaryInspiralGW(m1=gw['m1'], m2=gw['m2'], d=gw['d'], t_inj=gw['t_inj'] + pipe['t0'],
+        if gw['type'] == 'SMBHB':
+            gw = SMBHB(m1=gw['m1'], m2=gw['m2'], d=gw['d'], t_inj=gw['t_inj'] + pipe['t0'],
                                   spin1 = gw['spin1'], spin2 = gw['spin2'],
                         gw_beta=gw['gw_beta'], gw_lambda=gw['gw_lambda'], orbits=orbits_path)
 

@@ -13,44 +13,28 @@ TRAINING_RESULTS = DIST / 'training_results'
 INFERENCE = DIST / 'inference'
 PSD_PATH = DIST / 'psd_estimates'
 FIGURES = DIST / 'figures'
-
-# Define class-specific dataset locations.
-GW_DATASETS = TRAINING_DATASETS / 'gw_datasets'
-GLITCH_DATASETS = TRAINING_DATASETS / 'glitch_datasets'
-MIXED_DATASETS = TRAINING_DATASETS / 'mixed_datasets'
-EMPTY_DATASETS = TRAINING_DATASETS / 'empty_datasets'
 LPF_DATASETS = INFERENCE / 'lpf_datasets'
 
 # Standard input/output file paths used by the generation and inference scripts.
 orbits_path = str(DIST/ 'orbits' / 'orbits.h5')
 simulation_path = str(DIST / 'default_simulation_output.h5')
 glitch_path = str(DIST / 'default_glitch_output.h5')
-gw_path = str(DIST / 'default_gw_output.h5')
+smbhb_path = str(DIST / 'default_smbhb_output.h5')
 
 lpf_library_path = str(LPF_DATASETS / 'lpf-glitch-library.h5')
 lpf_ord_param_path = str(LPF_DATASETS / 'glitch_params_ordinary.txt')
 lpf_cold_param_path = str(LPF_DATASETS / 'glitch_params_cold.txt')
 
 # Training and test dataset destinations for each signal class.
-glitch_dataset_path = str(GLITCH_DATASETS / 'glitch_dataset.h5')
-gw_dataset_path = str(GW_DATASETS / 'gw_dataset.h5')
-mixed_dataset_path = str(MIXED_DATASETS / 'mixed_dataset.h5')
-empty_dataset_path = str(EMPTY_DATASETS / 'empty_dataset.h5')
 training_dataset_path = str(TRAINING_DATASETS / 'training_dataset.h5')
 
-glitch_testset_path = str(GLITCH_DATASETS / 'glitch_testset.h5')
-gw_testset_path = str(GW_DATASETS / 'gw_testset.h5')
-mixed_testset_path = str(MIXED_DATASETS / 'mixed_testset.h5')
-empty_testset_path = str(EMPTY_DATASETS / 'empty_testset.h5')
-
 # Random-forest filters used to select viable injection parameters.
-glitch_forest_path = str(GLITCH_DATASETS / 'glitch_random_forest.joblib')
-gw_forest_path = str(GW_DATASETS / 'gw_random_forest.joblib')
-mixed_forest_path = str(MIXED_DATASETS / 'mixed_random_forest.joblib')
+glitch_forest_path = str(TRAINING_DATASETS / 'glitch_random_forest.joblib')
+smbhb_forest_path = str(TRAINING_DATASETS / 'smbhb_random_forest.joblib')
 
 # Paths for transient time-centering inference inputs and results.
 glitch_timecen_path = str(INFERENCE / 'time_centering' / 'glitch_timecen.h5')
-gw_timecen_path = str(INFERENCE / 'time_centering' / 'gw_timecen.h5')
+smbhb_timecen_path = str(INFERENCE / 'time_centering' / 'smbhb_timecen.h5')
 timecen_result_path = str(INFERENCE / 'time_centering' / 'inference_results.npz')
 
 with h5py.File(orbits_path, 'r') as orb:
@@ -60,8 +44,8 @@ with h5py.File(orbits_path, 'r') as orb:
     orb_dt = orb.attrs['dt']
 
 # Shared simulation, Q-transform, and neural-network settings.
-PIPE = {'t0': orb_t0 + orb_size*orb_dt/2, 'dt': 1,'size': int(10 * 3600 / 1),
-        't_inj': 5 * 3600, 'keep_noises': ['test-mass', 'oms']}
+PIPE = {'t0': orb_t0 + orb_size*orb_dt/2, 'dt': 1,'size': int(12 * 3600 / 1),
+        'keep_noises': ['test-mass', 'oms']}
 SPECS = {'q16': {'trange':(-3, 3), 'frange':(1e-4, 1e-1), 'Q':16},
          'q6': {'trange':(-3, 3), 'frange':(1e-4, 1e-1), 'Q':6}}
 MODEL_PARAMS = {'width': 6, 'bn': True, 'normalise': True,

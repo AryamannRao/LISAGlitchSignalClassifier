@@ -12,8 +12,8 @@ warnings.filterwarnings("ignore")
 C = 3e8
 G = 6.67e-11
 
-class BinaryInspiralGW(ResponseFromStrain):
-    """Represents a GW resulting from a binary merger.
+class SMBHB(ResponseFromStrain):
+    """Represents a GW resulting from a SMBHB.
     """
     def __init__(self, m1, m2, d, t_inj, spin1=0.0, spin2=0.0, iota=0.0,
                 **kwargs,) -> None:
