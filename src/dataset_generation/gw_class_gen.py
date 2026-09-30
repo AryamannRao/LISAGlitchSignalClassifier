@@ -88,8 +88,7 @@ def run_one_sample(args):
             gws, glitches, pipe,
             local_gw_path, local_glitch_path, orbits_path,
             local_sim_path,
-            disable_noise=pipe['keep_noises'], seed=42
-        )
+            disable_noise=pipe['keep_noises'])
         tdi_dict = run_tdi(local_sim_path, pipe)
 
     os.remove(local_sim_path)
