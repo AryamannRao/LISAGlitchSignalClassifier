@@ -35,36 +35,51 @@ TIME_STEP = 25
 
 DEVICE = torch.device('mps')
 # Map the model's binary-label class values to source and result files.
-TRANSIENT_SIMPATHS = {1: gw_dataset_path, 2: glitch_dataset_path}
-TRANSIENT_RESULTPATHS = {1: gw_timecen_path, 2: glitch_timecen_path}
+smbhb_dataset_path = str(TRAINING_DATASETS/'dataset_10.h5')
+glitch_dataset_path = str(TRAINING_DATASETS/'dataset_01.h5')
 
-RESULTS_DIR = TRAINING_RESULTS / 'run_020826_231155'
+TRANSIENT_SIMPATHS = {1: smbhb_dataset_path, 2: glitch_dataset_path}
+TRANSIENT_RESULTPATHS = {1: smbhb_timecen_path, 2: glitch_timecen_path}
+
+RESULTS_DIR = TRAINING_RESULTS / 'run_041026_181522'
 DATASET_PATH = training_dataset_path
 WEIGHTS_PATH = RESULTS_DIR / 'best_model_weights.pth'
 
 def split_dataset(dataset, train_frac=0.7, val_frac=0.2):
-    # Split by simulation identifier to prevent image stacks leaking across subsets.
-    unique_indices = np.unique(dataset.sim_indices)
-    all_indices = np.array(dataset.sim_indices)
+    sim_indices = np.asarray(dataset.sim_indices)
+    labels = np.asarray(dataset.labels)
+
+    # Each (label, sim_idx) pair identifies one underlying simulation.
+    groups = np.unique(np.column_stack((labels, sim_indices)),axis=0)
 
     rng = np.random.default_rng(42)
-    rng.shuffle(unique_indices)
+    rng.shuffle(groups)
 
-    n_total = len(unique_indices)
+    n_total = len(groups)
     n_train = int(train_frac * n_total)
-    n_val   = int(val_frac * n_total)
+    n_val = int(val_frac * n_total)
 
-    train_sources = unique_indices[:n_train]
-    val_sources   = unique_indices[n_train:n_train+n_val]
-    test_sources  = unique_indices[n_train+n_val:]
+    train_groups = groups[:n_train]
+    val_groups = groups[n_train:n_train+n_val]
+    test_groups = groups[n_train+n_val:]
 
-    train_indices = np.where(np.isin(all_indices, train_sources))[0]
-    val_indices   = np.where(np.isin(all_indices, val_sources))[0]
-    test_indices  = np.where(np.isin(all_indices, test_sources))[0]
+    def get_indices(group_set):
+        mask = np.zeros(len(dataset), dtype=bool)
+
+        for label0, label1, sim_idx in group_set:
+            mask |= ((labels[:, 0] == label0) &
+                (labels[:, 1] == label1) &
+                (sim_indices == sim_idx))
+
+        return np.where(mask)[0]
+
+    train_indices = get_indices(train_groups)
+    val_indices = get_indices(val_groups)
+    test_indices = get_indices(test_groups)
 
     train_dataset = Subset(dataset, train_indices)
-    val_dataset   = Subset(dataset, val_indices)
-    test_dataset  = Subset(dataset, test_indices)
+    val_dataset = Subset(dataset, val_indices)
+    test_dataset = Subset(dataset, test_indices)
 
     return train_dataset, val_dataset, test_dataset
 
@@ -99,28 +114,73 @@ def evaluate_model(model, dataset):
     preds = torch.cat(all_preds)
     labels = torch.cat(all_labels)
 
-    # Encode two independent classifier outputs as GW=1, glitch=2, mixed=3.
+    # Encode two independent classifier outputs as smbhb=1, glitch=2, mixed=3.
     pred_class = preds[:,0]*1 + preds[:,1]*2
     true_class = labels[:,0]*1 + labels[:,1]*2
     return pred_class.numpy(), true_class.numpy()
 
+def get_centering_times():
+    tcen_arr = np.linspace(-3, 3, num=TIME_STEP)*3600
+    tcen0 = PIPE['size']*PIPE['dt']/2
+
+    return tcen_arr, tcen0
+
+def get_label(metadata):
+    if metadata['smbhb'] and not metadata['glitch']:
+        label = [1, 0]
+    elif not metadata['smbhb'] and metadata['glitch']:
+        label = [0, 1]
+
+    return label
+
+def create_jobs(h5file, start, batch_size):
+    n_signals = h5file['tdi/X'].shape[0]
+
+    end = min(start + batch_size, n_signals)
+
+    if start >= n_signals:
+        return None
+
+    X_array = h5file['tdi/X'][start:end]
+    Y_array = h5file['tdi/Y'][start:end]
+    Z_array = h5file['tdi/Z'][start:end]
+
+    jobs = []
+
+    for i in range(end - start):
+        sim_idx = start + i
+
+        A, E, T = get_AET(X_array[i],Y_array[i], Z_array[i])
+        tdi_dict = {'A': A, 'E': E, 'T': T}
+
+        metadata = {
+            'smbhb': json.loads(
+                h5file['metadata/smbhb_data'][sim_idx]),
+            'glitch': json.loads(
+                h5file['metadata/glitch_data'][sim_idx])
+        }
+
+        jobs.append((sim_idx, tdi_dict, metadata))
+
+    return jobs
+
 def run_one_sample(args):
-    # Generate a regularly centred Q-scan sequence for one selected simulation.
-    X, Y, Z = args
-    tdi_dict = make_tdi_dict(X, Y, Z, whiten=False)
-    # Sweep evenly through the ±3-hour time-centre range.
-    tcen_arr = np.linspace(-3, 3, TIME_STEP)*3600
+    sim_idx, tdi_dict, metadata = args
+
+    # Draw offsets in hours, then express them in seconds for the Q-scan helper.
+    tcen_arr, tcen0 = get_centering_times()
+    label = get_label(metadata)
     
     images = np.zeros((len(tcen_arr), RESOLUTION, RESOLUTION, CHANNELS))
-    t_axes = np.zeros((len(tcen_arr), RESOLUTION, CHANNELS))
-    f_axes = np.zeros((len(tcen_arr), RESOLUTION, CHANNELS))
-    tcen_vals = np.zeros(len(tcen_arr))
+    image_metadatas, labels = [], []
 
     for i, tcen in enumerate(tcen_arr):
-        event = PIPE['t_inj'] - tcen
+        event = tcen0 - tcen
         QT = np.zeros((RESOLUTION, RESOLUTION, CHANNELS))
         t_axis = np.zeros((RESOLUTION, CHANNELS))
         f_axis = np.zeros((RESOLUTION, CHANNELS))
+
+        # Use both A/E channels and two Q values to form four image channels.
         j = 0
         for channel in ['A', 'E']:
             for spec in [SPECS['q6'], SPECS['q16']]:
@@ -132,9 +192,12 @@ def run_one_sample(args):
                 f_axis[:, j] = f_arr
                 j += 1
         
-        images[i], t_axes[i], f_axes[i], tcen_vals[i] = QT, t_axis, f_axis, tcen
+        images[i] = QT
+        labels.append(label)
+        image_metadatas.append({'t_axis': t_axis, 'f_axis':f_axis,
+                                'tcen':tcen, 'sim_idx':sim_idx, 'time_idx':i})
 
-    return images, t_axes, f_axes, tcen_vals
+    return images, labels, image_metadatas
 
 def run_chunk(job_chunk):
     # Process a group of simulations while isolating individual failures.
@@ -152,7 +215,7 @@ def chunkify(lst, chunksize):
     for i in range(0, len(lst), chunksize):
         yield lst[i:i + chunksize]
 
-def create_inference_set(model, transient_type, keys=['QT', 't_qscan', 'f_qscan', 'tcen']):
+def create_inference_set(model, transient_type):
     # Create Q-scan sequences from correctly classified test simulations of one class.
     dataset = LISADataset(DATASET_PATH)
     _, _, test_dataset = split_dataset(dataset)
@@ -167,13 +230,12 @@ def create_inference_set(model, transient_type, keys=['QT', 't_qscan', 'f_qscan'
     print(f"Found {len(sim_indices)} correctly classified samples for chosen transient type.")
 
     simulation_path = TRANSIENT_SIMPATHS[transient_type]
-    with h5py.File(simulation_path, 'r') as f:
-        X_array = f['X'][sim_indices]
-        Y_array = f['Y'][sim_indices]
-        Z_array = f['Z'][sim_indices]
+    h5 = h5py.File(simulation_path, 'r')
+    jobs = []
 
-    # Prepare job list
-    jobs = [(X_array[i], Y_array[i], Z_array[i]) for i in range(len(X_array))]
+    for sim_idx in sim_indices:
+        jobs.extend(create_jobs(h5,start=int(sim_idx),batch_size=1))
+    h5.close()
 
     print(f"Running with {N_WORKERS} workers")
 
@@ -183,74 +245,98 @@ def create_inference_set(model, transient_type, keys=['QT', 't_qscan', 'f_qscan'
     total_samples = len(jobs)
 
     completed_samples = 0
-    keys = ['QT', 't_qscan', 'f_qscan']
 
     save_path = TRANSIENT_RESULTPATHS[transient_type]
-    h5file = create_imageset(save_path, TIME_STEP, RESOLUTION, CHANNELS, keys=keys)
+    h5file = h5py.File(save_path, 'w')
+    h5file = create_imageset(h5file, RESOLUTION, CHANNELS)
     with ProcessPoolExecutor(max_workers=N_WORKERS) as executor:
-        futures = [executor.submit(run_chunk, chunk) for chunk in job_chunks]
+            futures = [executor.submit(run_chunk, chunk)
+                for chunk in job_chunks]
 
-        for future in tqdm(futures, total=total_chunks, desc="Chunks completed"):
-            results = future.result()
-            
-            completed_samples += len(results)
-            tqdm.write(f"Samples done: {completed_samples}/{total_samples}")
-            
-            for images, t_axes, f_axes, tcen in results:
-                append_image(h5file, images, t_axes, f_axes, tcen, keys=keys)
-    
-    h5file.create_dataset('sim_indices', data=sim_indices)
+            for future in tqdm(as_completed(futures),
+                total=total_chunks,desc="Chunks completed"):
+
+                results = future.result()
+                completed_samples += len(results)
+
+                tqdm.write(f"Samples done: "f"{completed_samples}/{total_samples}")
+
+                for images, labels, image_metadatas in results:
+                    for i in range(len(image_metadatas)):
+                        append_image(h5file, images[i], labels[i], image_metadatas[i])
+
     h5file.close()
 
 def run_inference(model):
-    # Measure mean classifier responses and variation at each scan-centre offset.
-    with h5py.File(gw_timecen_path, 'r') as f:
-        gws = f['QT'][:]
-    with h5py.File(glitch_timecen_path, 'r') as f:
-        glitches = f['QT'][:]
-        tcen_vals = f['tcen'][:]
+    with h5py.File(smbhb_timecen_path, 'r') as f:
+        smbhbs = f['images'][:]
+        smbhb_time_idx = f['image_metadata/time_idx'][:]
+        smbhb_tcen = f['image_metadata/tcen'][:]
 
-    gw_acc, glitch_acc, gw_std, glitch_std = [], [], [], []
-    # Evaluate each time slice without computing gradients.
+    with h5py.File(glitch_timecen_path, 'r') as f:
+        glitches = f['images'][:]
+        glitch_time_idx = f['image_metadata/time_idx'][:]
+
+    smbhb_acc = []
+    glitch_acc = []
+    smbhb_std = []
+    glitch_std = []
+
     with torch.no_grad():
         for i in range(TIME_STEP):
-            gw_images = torch.tensor(gws[:, i, :, :, :],\
-                                    dtype=torch.float32).permute(0, 3, 1, 2).contiguous()
-            glitch_images = torch.tensor(glitches[:, i, :, :, :],\
-                                        dtype=torch.float32).permute(0, 3, 1, 2).contiguous()
+            # All simulations' images at the same time-centering.
+            smbhb_indices = np.where(smbhb_time_idx == i)[0]
+            glitch_indices = np.where(glitch_time_idx == i)[0]
 
-            gw_outputs = model(gw_images.to(DEVICE))
-            glitch_outputs = model(glitch_images.to(DEVICE))
+            smbhb_images = torch.tensor(
+                smbhbs[smbhb_indices],
+                dtype=torch.float32
+            ).permute(0, 3, 1, 2).contiguous()
 
-            gw_probs = torch.sigmoid(gw_outputs)
-            glitch_probs = torch.sigmoid(glitch_outputs)
+            glitch_images = torch.tensor(
+                glitches[glitch_indices],
+                dtype=torch.float32
+            ).permute(0, 3, 1, 2).contiguous()
 
-            gw_acc.append(np.mean(gw_probs.to('cpu').numpy(), axis=0))
-            glitch_acc.append(np.mean(glitch_probs.to('cpu').numpy(), axis=0))
+            # CNN outputs.
+            smbhb_probs = torch.sigmoid(
+                model(smbhb_images.to(DEVICE))
+            ).cpu().numpy()
 
-            gw_std.append(np.std(gw_probs.to('cpu').numpy(), axis=0))
-            glitch_std.append(np.std(glitch_probs.to('cpu').numpy(), axis=0))
+            glitch_probs = torch.sigmoid(
+                model(glitch_images.to(DEVICE))
+            ).cpu().numpy()
 
-    return tcen_vals[0,:], gw_acc, glitch_acc, gw_std, glitch_std
+            # Average over all transients having this tcen.
+            smbhb_acc.append(np.mean(smbhb_probs, axis=0))
+            glitch_acc.append(np.mean(glitch_probs, axis=0))
+
+            smbhb_std.append(np.std(smbhb_probs, axis=0))
+            glitch_std.append(np.std(glitch_probs, axis=0))
+
+    times = np.array([smbhb_tcen[np.where(smbhb_time_idx == i)[0][0]]
+        for i in range(TIME_STEP)])
+
+    return (times, np.array(smbhb_acc), np.array(glitch_acc),
+        np.array(smbhb_std), np.array(glitch_std))
 
 def main():
     # Build missing inference image sets, then save time-dependent model responses.
     model = load_best_model(WEIGHTS_PATH, MODEL_PARAMS)
 
-    if not os.path.exists(gw_timecen_path):
-        print("Creating GW inference dataset...")
+    if not os.path.exists(smbhb_timecen_path):
+        print("Creating smbhb inference dataset...")
         create_inference_set(model, transient_type=1)
     
     if not os.path.exists(glitch_timecen_path):
         print("Creating Glitch inference dataset...")
         create_inference_set(model, transient_type=2)
     
-    if os.path.exists(gw_timecen_path) and os.path.exists(glitch_timecen_path):
+    if os.path.exists(smbhb_timecen_path) and os.path.exists(glitch_timecen_path):
         print("Running inference...")
-        times, gw_acc, glitch_acc, gw_std, glitch_std = run_inference(model)
-        np.savez(timecen_result_path, times=times, gw_acc=gw_acc,\
-                  glitch_acc=glitch_acc, gw_std=gw_std, glitch_std=glitch_std)
-
+        times, smbhb_acc, glitch_acc, smbhb_std, glitch_std = run_inference(model)
+        np.savez(timecen_result_path, times=times, smbhb_acc=smbhb_acc,\
+                  glitch_acc=glitch_acc, smbhb_std=smbhb_std, glitch_std=glitch_std)
 
 if __name__ == "__main__":
     main()

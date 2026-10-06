@@ -74,8 +74,8 @@ class LISADataset(Dataset):
         
         self.images = self.file["images"]
         self.labels = self.file["labels"]
-        self.sim_indices = self.file["sim_index"]
-        self.time_indices = self.file["time_index"]
+        self.sim_indices = self.file["image_metadata/sim_idx"]
+        self.time_indices = self.file["image_metadata/time_idx"]
         
     def __len__(self):
         # Report the number of flattened Q-transform images.

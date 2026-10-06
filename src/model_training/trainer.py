@@ -24,15 +24,6 @@ DATASET_PATH = training_dataset_path
 
 SAVE_DIR = TRAINING_RESULTS / f'run_{datetime.now().strftime("%d%m%y_%H%M%S")}'
 
-"""WIDTH = 6
-USE_BATCH_NORM = True
-NORMALISE = True
-BATCH_SIZE = 64
-LEARNING_RATE = 0.001
-NUM_EPOCHS = 5
-DROP = 0.0
-PLOT_EVERY = 33"""
-
 # Load tunable training settings from the shared configuration.
 WIDTH = MODEL_PARAMS['width']
 USE_BATCH_NORM = MODEL_PARAMS['bn']
@@ -52,28 +43,41 @@ def set_seed(seed=42):
     np.random.seed(seed)
 
 def split_dataset(dataset, train_frac=0.7, val_frac=0.2):
-    # Split by simulation ID so related time-centred images stay in one subset.
-    unique_indices = np.unique(dataset.sim_indices)
-    all_indices = np.array(dataset.sim_indices)
+
+    sim_indices = np.asarray(dataset.sim_indices)
+    labels = np.asarray(dataset.labels)
+
+    # Each (label, sim_idx) pair identifies one underlying simulation.
+    groups = np.unique(np.column_stack((labels, sim_indices)),axis=0)
 
     rng = np.random.default_rng(42)
-    rng.shuffle(unique_indices)
+    rng.shuffle(groups)
 
-    n_total = len(unique_indices)
+    n_total = len(groups)
     n_train = int(train_frac * n_total)
-    n_val   = int(val_frac * n_total)
+    n_val = int(val_frac * n_total)
 
-    train_sources = unique_indices[:n_train]
-    val_sources   = unique_indices[n_train:n_train+n_val]
-    test_sources  = unique_indices[n_train+n_val:]
+    train_groups = groups[:n_train]
+    val_groups = groups[n_train:n_train+n_val]
+    test_groups = groups[n_train+n_val:]
 
-    train_indices = np.where(np.isin(all_indices, train_sources))[0]
-    val_indices   = np.where(np.isin(all_indices, val_sources))[0]
-    test_indices  = np.where(np.isin(all_indices, test_sources))[0]
+    def get_indices(group_set):
+        mask = np.zeros(len(dataset), dtype=bool)
+
+        for label0, label1, sim_idx in group_set:
+            mask |= ((labels[:, 0] == label0) &
+                (labels[:, 1] == label1) &
+                (sim_indices == sim_idx))
+
+        return np.where(mask)[0]
+
+    train_indices = get_indices(train_groups)
+    val_indices = get_indices(val_groups)
+    test_indices = get_indices(test_groups)
 
     train_dataset = Subset(dataset, train_indices)
-    val_dataset   = Subset(dataset, val_indices)
-    test_dataset  = Subset(dataset, test_indices)
+    val_dataset = Subset(dataset, val_indices)
+    test_dataset = Subset(dataset, test_indices)
 
     return train_dataset, val_dataset, test_dataset
 

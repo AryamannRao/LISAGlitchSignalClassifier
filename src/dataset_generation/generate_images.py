@@ -24,13 +24,14 @@ from helpers.config import *
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from tqdm import tqdm
 
-FILE_PATH = training_dataset_path
+FILE_PATH = str(TRAINING_DATASETS / 'dataset_00.h5')
 
 # Image-stack dimensions and parallel processing settings.
 RESOLUTION = 128
 TIME_STEP = 5
 CHANNELS = 4
 N_WORKERS, CHUNKSIZE = 6, 2
+BATCH_SIZE = 50
 
 def get_centering_times(metadata):
     if metadata['smbhb'] and metadata['glitch']:
@@ -109,77 +110,99 @@ def chunkify(lst, chunksize):
     for i in range(0, len(lst), chunksize):
         yield lst[i:i + chunksize]
 
-def create_jobs(h5file):
-    if len(h5file['image_metadata/sim_idx']) > 0:
-        n_images = h5file['image_metadata/sim_idx'][-1] + 1
-    else:
-        n_images = 0
+def create_jobs(h5file, start, batch_size):
     n_signals = h5file['tdi/X'].shape[0]
 
-    # If all signals already have images, exit early
-    if n_images >= n_signals:
+    end = min(start + batch_size, n_signals)
+
+    if start >= n_signals:
         return None
 
-    # Otherwise continue from where we left off
-    X_array = h5file['tdi/X'][n_images:]
-    Y_array = h5file['tdi/Y'][n_images:]
-    Z_array = h5file['tdi/Z'][n_images:]
+    X_array = h5file['tdi/X'][start:end]
+    Y_array = h5file['tdi/Y'][start:end]
+    Z_array = h5file['tdi/Z'][start:end]
 
-    # Prepare job list
     jobs = []
-    for i in range(len(X_array)):
-        tdi_dict = {}
-        A,E,T = get_AET(X_array[i], Y_array[i], Z_array[i])
-        tdi_dict['A'] = A
-        tdi_dict['E'] = E
-        tdi_dict['T'] = T
 
-        metadata = {'smbhb': json.loads(h5file['metadata/smbhb_data'][n_images + i]),
-                    'glitch': json.loads(h5file['metadata/glitch_data'][n_images + i])}
-        jobs.append((n_images + i, tdi_dict, metadata))
+    for i in range(end - start):
+        sim_idx = start + i
+
+        A, E, T = get_AET(X_array[i],Y_array[i], Z_array[i])
+        tdi_dict = {'A': A, 'E': E, 'T': T}
+
+        metadata = {
+            'smbhb': json.loads(
+                h5file['metadata/smbhb_data'][sim_idx]),
+            'glitch': json.loads(
+                h5file['metadata/glitch_data'][sim_idx])
+        }
+
+        jobs.append((sim_idx, tdi_dict, metadata))
 
     return jobs
 
 def main():
-    # Add Q-transform stacks for every dataset signal not yet represented in the file.
-    start = time.time()
+    # Add Q-transform images for every dataset signal not yet represented in the file.
+    start_time = time.time()
 
-    h5file = h5py.File(FILE_PATH, "r+")
+    h5file = h5py.File(FILE_PATH, 'r+')
 
-    # Reuse the class HDF5 file and create image datasets only when absent.
+    # Create image datasets if they do not already exist.
     if 'images' not in h5file:
-        create_imageset(h5file, TIME_STEP, RESOLUTION, CHANNELS)
+        create_imageset(h5file, RESOLUTION, CHANNELS)
 
-    jobs = create_jobs(h5file)
-    if jobs is None:
+    # Resume from the simulation after the last one whose images were saved.
+    sim_idx_dset = h5file['image_metadata/sim_idx']
+
+    if len(sim_idx_dset) > 0:
+        start = int(sim_idx_dset[-1]) + 1
+    else:
+        start = 0
+
+    n_signals = h5file['tdi/X'].shape[0]
+
+    if start >= n_signals:
         print("All signals already have generated images. Nothing to do.")
         h5file.close()
-        return None
+        return
 
     print(f"Running with {N_WORKERS} workers")
 
-    job_chunks = list(chunkify(jobs, CHUNKSIZE))
-    total_chunks = len(job_chunks)
-    total_samples = len(jobs)
+    while start < n_signals:
+        end = min(start + BATCH_SIZE, n_signals)
+        print(f"Processing simulations {start} to {end - 1}")
+        
+        jobs = create_jobs(h5file,start,BATCH_SIZE)
+        job_chunks = list(chunkify(jobs, CHUNKSIZE))
 
-    completed_samples = 0
-    with ProcessPoolExecutor(max_workers=N_WORKERS) as executor:
-        futures = [executor.submit(run_chunk, chunk) for chunk in job_chunks]
+        total_chunks = len(job_chunks)
+        total_samples = len(jobs)
+        completed_samples = 0
 
-        for future in tqdm(futures, total=total_chunks, desc="Chunks completed"):
-            results = future.result()
-            
-            completed_samples += len(results)
-            tqdm.write(f"Samples done: {completed_samples}/{total_samples}")
-            
-            for images, labels, image_metadatas in results:
-                for i in range(len(image_metadatas)):
-                    append_image(h5file, images[i], labels[i], image_metadatas[i])
-    
+        with ProcessPoolExecutor(max_workers=N_WORKERS) as executor:
+            futures = [executor.submit(run_chunk, chunk)
+                for chunk in job_chunks]
+
+            for future in tqdm(as_completed(futures),
+                total=total_chunks,desc="Chunks completed"):
+
+                results = future.result()
+                completed_samples += len(results)
+
+                tqdm.write(f"Samples done: "f"{completed_samples}/{total_samples}")
+
+                for images, labels, image_metadatas in results:
+                    for i in range(len(image_metadatas)):
+                        append_image(h5file, images[i], labels[i], image_metadatas[i])
+
+        # Make sure everything from this batch is written to disk.
+        h5file.flush()
+        start = end
+
     h5file.close()
+    end_time = time.time()
 
-    end = time.time()
-    print(f"Total time taken: {end - start:.2f} seconds")
+    print(f"Total time taken: {end_time - start_time:.2f} seconds")
 
 if __name__ == "__main__":
     main()

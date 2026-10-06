@@ -51,7 +51,7 @@ with h5py.File(orbits_path, 'r') as orb:
 N_SMBHB_MERG, N_GLITCH = 0, 0
 NSAMPLES = 1500
 TEST = False
-FILE_PATH = training_dataset_path
+FILE_PATH = str(TRAINING_DATASETS / f'dataset_{N_SMBHB_MERG}{N_GLITCH}.h5')
 
  # Bounds used when sampling source masses, distances, spins, and orientations.
 LOG_MASS_MIN, LOG_MASS_MAX = 4, 7
@@ -237,7 +237,7 @@ def main():
 
     jobs = create_jobs(samples, t0_array)
 
-    h5file = create_or_open_dataset(FILE_PATH)
+    h5file = create_simulation_dataset(FILE_PATH)
     
     print(f"Running with {N_WORKERS} workers")
 

@@ -4,7 +4,7 @@ import json
 import os
 from helpers.config import *
 
-def create_or_open_dataset(file_path):
+def create_simulation_dataset(file_path):
     if os.path.exists(file_path):
         return h5py.File(file_path, 'a')
     
@@ -61,7 +61,7 @@ def append_sample(h5file, tdi_dict, metadata):
         else:
             dset[-1] = json.dumps(metadata[key])
 
-def create_imageset(h5file, time_steps, resolution, channels):
+def create_imageset(h5file, resolution, channels):
 
     h5file.create_dataset(
         'images', 
@@ -72,7 +72,7 @@ def create_imageset(h5file, time_steps, resolution, channels):
         compression="gzip")
 
     h5file.create_dataset(
-        'labels', shape=(0, 2), maxshape=(None, 2), dtype="int8",)
+        'labels', shape=(0, 2), maxshape=(None, 2), dtype="int64",)
 
     image_metadata = h5file.create_group('image_metadata')
 
@@ -90,27 +90,44 @@ def create_imageset(h5file, time_steps, resolution, channels):
 
     image_metadata.create_dataset(
         'sim_idx', shape=(0,),
-        maxshape=(None,), dtype="int8")
+        maxshape=(None,), dtype="int64")
 
     image_metadata.create_dataset(
         'time_idx', shape=(0,),
-        maxshape=(None,), dtype="int8")
+        maxshape=(None,), dtype="int64")
 
     return h5file
 
-def append_image(h5file, image, label, image_metadata):
-    # Images
-    dset = h5file['images']
-    dset.resize(dset.shape[0] + 1, axis=0)
-    dset[-1] = image
+def append_image(h5file, images, labels, image_metadata):
+    # Convert a single image into a batch of one.
 
-    # Labels
-    dset = h5file['labels']
-    dset.resize(dset.shape[0] + 1, axis=0)
-    dset[-1] = label
+    if images.ndim == 3:
+        images = images[None, ...]
+        labels = np.asarray(labels)[None, ...]
+        image_metadata = {
+            't_axis': np.asarray(image_metadata['t_axis'])[None, ...],
+            'f_axis': np.asarray(image_metadata['f_axis'])[None, ...],
+            'tcen': np.asarray(image_metadata['tcen'])[None],
+            'sim_idx': np.asarray(image_metadata['sim_idx'])[None],
+            'time_idx': np.asarray(image_metadata['time_idx'])[None]
+        }
 
-    # Image metadata
+    n = len(images)
+
+    keys = ['images','labels',
+        'image_metadata/t_axis',
+        'image_metadata/f_axis',
+        'image_metadata/tcen',
+        'image_metadata/sim_idx',
+        'image_metadata/time_idx']
+
+    for key in keys:
+        dset = h5file[key]
+        start = dset.shape[0]
+        dset.resize(start + n, axis=0)
+
+    h5file['images'][-n:] = images
+    h5file['labels'][-n:] = labels
+
     for key in ['t_axis', 'f_axis', 'tcen', 'sim_idx', 'time_idx']:
-        dset = h5file[f'image_metadata/{key}']
-        dset.resize(dset.shape[0] + 1, axis=0)
-        dset[-1] = image_metadata[key]
+        h5file[f'image_metadata/{key}'][-n:] = image_metadata[key]
